@@ -47,7 +47,6 @@ class OMYSdk:
 
         # Define joint names
         self.joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "rh_r1_joint"]
-        self.exclude_joints = []
 
         # DDS Topic Manager
         topic_manager = TopicManager(domain_id=self.domain_id)

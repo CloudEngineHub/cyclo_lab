@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser(description="Inference script for robotis_lab e
 parser.add_argument("--task", type=str, required=True, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=42, help="Seed for the environment.")
 parser.add_argument("--step_hz", type=int, default=60, help="Environment stepping rate in Hz.")
-parser.add_argument("--robot_type", type=str, default="OMY", choices=['OMY'], help="Type of robot to use for teleoperation.")
+parser.add_argument("--robot_type", type=str, default="OMY", choices=['OMY', 'FFW_SG2'], help="Type of robot to use for teleoperation.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -93,6 +93,9 @@ def main():
     if args_cli.robot_type == "OMY":
         from dds_sdk.omy_sdk import OMYSdk
         teleop_interface = OMYSdk(env, mode='inference')
+    elif args_cli.robot_type == "FFW_SG2":
+        from dds_sdk.ffw_sg2_sdk import FFW_SG2_Sdk
+        teleop_interface = FFW_SG2_Sdk(env, mode='inference')
     else:
         raise ValueError(f"Unsupported robot type: {args_cli.robot_type}")
 

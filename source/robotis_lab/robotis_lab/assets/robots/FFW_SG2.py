@@ -36,13 +36,10 @@ FFW_SG2_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
-            # Swerve base joints
-            "left_wheel_drive": 0.0, "left_wheel_steer": 0.0,
-            "right_wheel_drive": 0.0, "right_wheel_steer": 0.0,
-            "rear_wheel_drive": 0.0, "rear_wheel_steer": 0.0,
-
-            # Lift joint
-            "lift_joint": 0.0,
+            # # Swerve base joints
+            # "left_wheel_drive": 0.0, "left_wheel_steer": 0.0,
+            # "right_wheel_drive": 0.0, "right_wheel_steer": 0.0,
+            # "rear_wheel_drive": 0.0, "rear_wheel_steer": 0.0,
 
             # Left arm joints
             **{f"arm_l_joint{i + 1}": 0.0 for i in range(7)},
@@ -50,35 +47,38 @@ FFW_SG2_CFG = ArticulationCfg(
             **{f"arm_r_joint{i + 1}": 0.0 for i in range(7)},
 
             # Left and right gripper joints
-            **{f"gripper_l_joint{i + 1}": 0.0 for i in range(4)},
-            **{f"gripper_r_joint{i + 1}": 0.0 for i in range(4)},
+            "gripper_l_joint1": 0.0,
+            "gripper_r_joint1": 0.0,
 
             # Head joints
             "head_joint1": 0.0,
             "head_joint2": 0.0,
+
+            # Lift joint
+            "lift_joint": 0.0,
         },
     ),
     actuators={
         # Actuators for swerve base
-        "base": ImplicitActuatorCfg(
-            joint_names_expr=[
-                "left_wheel_drive", "left_wheel_steer",
-                "right_wheel_drive", "right_wheel_steer",
-                "rear_wheel_drive", "rear_wheel_steer",
-            ],
-            velocity_limit_sim=30.0,
-            effort_limit_sim=100000.0,
-            stiffness=10000.0,
-            damping=100.0,
-        ),
+        # "base": ImplicitActuatorCfg(
+        #     joint_names_expr=[
+        #         "left_wheel_drive", "left_wheel_steer",
+        #         "right_wheel_drive", "right_wheel_steer",
+        #         "rear_wheel_drive", "rear_wheel_steer",
+        #     ],
+        #     velocity_limit_sim=30.0,
+        #     effort_limit_sim=100000.0,
+        #     stiffness=10000.0,
+        #     damping=100.0,
+        # ),
 
         # Actuator for vertical lift joint
         "lift": ImplicitActuatorCfg(
             joint_names_expr=["lift_joint"],
             velocity_limit_sim=1.0,
-            effort_limit_sim=1000.0,
-            stiffness=10000.0,
-            damping=1000.0,
+            effort_limit_sim=10000000.0,
+            stiffness=1000000.0,
+            damping=100000.0,
         ),
 
         # Actuators for both arms
@@ -90,19 +90,19 @@ FFW_SG2_CFG = ArticulationCfg(
             velocity_limit_sim=10.0,
             effort_limit_sim=1000.0,
             stiffness=400.0,
-            damping=80.0,
+            damping=50.0,
         ),
 
         # Actuators for grippers
         "grippers": ImplicitActuatorCfg(
             joint_names_expr=[
-                "gripper_l_joint[1-4]",
-                "gripper_r_joint[1-4]",
+                "gripper_l_joint1",
+                "gripper_r_joint1",
             ],
-            velocity_limit_sim=5.0,
-            effort_limit_sim=5000.0,
-            stiffness=100000.0,
-            damping=100.0,
+            velocity_limit_sim=6.0,
+            effort_limit_sim=30.0,
+            stiffness=20.0,
+            damping=5.0,
         ),
 
         # Actuators for head joints
