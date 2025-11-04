@@ -265,7 +265,7 @@ class FFW_SG2_Sdk:
             # Flatten nested lists if necessary
             if isinstance(all_positions[0], list):
                 all_positions = [p for sub in all_positions for p in sub]
-            
+
             # Build joint state from current robot state
             joint_state = {}
             for name in self.joint_names:

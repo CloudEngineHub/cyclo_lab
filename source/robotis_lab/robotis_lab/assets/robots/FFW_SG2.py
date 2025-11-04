@@ -24,7 +24,7 @@ FFW_SG2_CFG = ArticulationCfg(
     spawn=UsdFileCfg(
         usd_path=f"{ROBOTIS_LAB_ASSETS_DATA_DIR}/robots/FFW/FFW_SG2.usd",
         rigid_props=RigidBodyPropertiesCfg(
-            disable_gravity=False,
+            disable_gravity=True,
             max_depenetration_velocity=5.0,
         ),
         articulation_props=ArticulationRootPropertiesCfg(
@@ -88,7 +88,7 @@ FFW_SG2_CFG = ArticulationCfg(
                 "arm_r_joint[1-7]",
             ],
             velocity_limit_sim=10.0,
-            effort_limit_sim=1000.0,
+            effort_limit_sim=10000.0,
             stiffness=400.0,
             damping=50.0,
         ),

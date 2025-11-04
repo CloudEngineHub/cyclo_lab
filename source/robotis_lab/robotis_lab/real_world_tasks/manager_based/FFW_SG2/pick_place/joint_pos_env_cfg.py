@@ -56,7 +56,7 @@ class EventCfg:
                 "arm_l_joint4": -1.85,
                 "arm_l_joint6": -0.524,
                 "arm_r_joint1": 0.943,
-                "arm_r_joint2": 0.216,
+                "arm_r_joint2": -0.216,
                 "arm_r_joint4": -1.85,
                 "arm_r_joint6": -0.524,
                 "head_joint1": 0.69216,
@@ -71,7 +71,7 @@ class EventCfg:
         mode="reset",
         params={
             "mean": 0.0,
-            "std": 0.02,
+            "std": 0.01,
             "joint_names": ["arm_l_joint1", "arm_l_joint2", "arm_l_joint3", "arm_l_joint4", "arm_l_joint5", "arm_l_joint6", "arm_l_joint7",
                             "arm_r_joint1", "arm_r_joint2", "arm_r_joint3", "arm_r_joint4", "arm_r_joint5", "arm_r_joint6", "arm_r_joint7"],
             "asset_cfg": SceneEntityCfg("robot"),
@@ -83,7 +83,7 @@ class EventCfg:
         mode="reset",
         params={
             "pose_range": {
-                "x": (-0.01, 0.01),
+                "x": (0.03, 0.05),
                 "y": (-0.01, 0.01),
                 "z": (0.0, 0.0),
                 "roll": (0.0, 0.0),
@@ -98,7 +98,7 @@ class EventCfg:
         func=ffw_sg2_pick_place_events.randomize_object_pose,
         mode="reset",
         params={
-            "pose_range": {"x": (0.45, 0.7), "y": (-0.3, 0.3), "z": (0.8, 0.8), "roll": (math.pi/2, math.pi/2)},
+            "pose_range": {"x": (0.45, 0.6), "y": (-0.3, 0.0), "z": (0.8, 0.8), "roll": (math.pi/2, math.pi/2)},
             "min_separation": 0.1,
             "asset_cfgs": [SceneEntityCfg("bottle")],
         },
