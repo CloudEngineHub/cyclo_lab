@@ -78,3 +78,44 @@ OMY_OFF_SELF_COLLISION_CFG = OMY_CFG.replace(
         )
     )
 )
+
+OMY_HIGH_PD_CFG = OMY_OFF_SELF_COLLISION_CFG.replace(
+    spawn=OMY_OFF_SELF_COLLISION_CFG.spawn,
+    init_state=ArticulationCfg.InitialStateCfg(
+        joint_pos={
+            "joint1": 0.0,
+            "joint2": -0.3,
+            "joint3": 1.7,
+            "joint4": -0.2,
+            "joint5": 1.53,
+            "joint6": 0.0,
+            "rh_l1": 0.0,
+            "rh_l2": 0.0,
+            "rh_r1_joint": 0.0,
+            "rh_r2": 0.0,
+        }
+    ),
+    actuators={
+        "DY_80": ImplicitActuatorCfg(
+            joint_names_expr=["joint[1-3]"],
+            velocity_limit_sim=100.0,
+            effort_limit_sim=1000.0,
+            stiffness=400.0,
+            damping=80.0,
+        ),
+        "DY_70": ImplicitActuatorCfg(
+            joint_names_expr=["joint[4-6]"],
+            velocity_limit_sim=100.0,
+            effort_limit_sim=1000.0,
+            stiffness=400.0,
+            damping=80,
+        ),
+        "gripper": ImplicitActuatorCfg(
+            joint_names_expr=["rh_l1", "rh_l2", "rh_r1_joint", "rh_r2"],
+            velocity_limit_sim=6.0,
+            effort_limit_sim=1000.0,
+            stiffness=1000000.0,
+            damping=100.0,
+        ),
+    }
+)

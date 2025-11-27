@@ -26,6 +26,7 @@ from isaaclab.sensors.frame_transformer.frame_transformer_cfg import OffsetCfg
 from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
 from robotis_lab.simulation_tasks.manager_based.OMY.lift import mdp
 
@@ -34,7 +35,7 @@ from robotis_lab.simulation_tasks.manager_based.OMY.lift.lift_env_cfg import Lif
 ##
 # Pre-defined configs
 ##
-from robotis_lab.assets.robots.OMY import OMY_CFG  # isort: skip
+from robotis_lab.assets.robots.OMY import OMY_HIGH_PD_CFG  # isort: skip
 
 
 @configclass
@@ -44,7 +45,7 @@ class OMYCubeLiftEnvCfg(LiftEnvCfg):
         super().__post_init__()
 
         # Set OMY as robot
-        self.scene.robot = OMY_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.robot = OMY_HIGH_PD_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
         # Set actions for the specific robot type (OMY)
         self.actions.arm_action = mdp.JointPositionActionCfg(
@@ -65,7 +66,7 @@ class OMYCubeLiftEnvCfg(LiftEnvCfg):
         # Set Cube as object
         self.scene.object = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/Object",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.055], rot=[1, 0, 0, 0]),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.02], rot=[1, 0, 0, 0]),
             spawn=sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
                 scale=(0.8, 0.8, 0.8),
@@ -81,13 +82,13 @@ class OMYCubeLiftEnvCfg(LiftEnvCfg):
         )
 
         # Listens to the required transforms
-        # marker_cfg = FRAME_MARKER_CFG.copy()
-        # marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-        # marker_cfg.prim_path = "/Visuals/FrameTransformer"
+        marker_cfg = FRAME_MARKER_CFG.copy()
+        marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+        marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.scene.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/OMY/world",
             debug_vis=False,
-            # visualizer_cfg=marker_cfg,
+            visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
                     prim_path="{ENV_REGEX_NS}/Robot/OMY/link6",
