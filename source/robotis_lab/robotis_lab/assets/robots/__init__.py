@@ -35,3 +35,4 @@ __version__ = ROBOTIS_LAB_ASSETS_METADATA["package"]["version"]
 from .OMY import *
 from .FFW_BG2 import *
 from .FFW_SG2 import *
+from .FFW_SH5 import *
