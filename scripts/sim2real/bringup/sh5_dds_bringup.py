@@ -31,33 +31,26 @@ from copy import deepcopy
 from isaaclab.app import AppLauncher
 
 
+RIGHT_ARM_TOPIC = "/leader/joint_trajectory_command_broadcaster_right/joint_trajectory"
+RIGHT_HAND_TOPIC = "/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory"
+LEFT_ARM_TOPIC = "/leader/joint_trajectory_command_broadcaster_left/joint_trajectory"
+LEFT_HAND_TOPIC = "/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory"
+HEAD_TOPIC = "/leader/joystick_controller_left/joint_trajectory"
+LIFT_TOPIC = "/leader/joystick_controller_right/joint_trajectory"
+JOINT_STATES_TOPIC = "/joint_states"
+TF_TOPIC = "/tf"
+BASE_FRAME = "base_link"
+PUBLISH_HZ = 60.0
+STEP_HZ = 120.0
+ROBOT_POS = (0.0, 0.0, -0.18)
+ARTICULATION_ROOT_PRIM_PATH = "/base_link/base_link"
+
+
 parser = argparse.ArgumentParser(description="FFW SH5 DDS bringup for Isaac Sim.")
-parser.add_argument("--right_arm_topic", type=str, default="/leader/joint_trajectory_command_broadcaster_right/joint_trajectory")
-parser.add_argument("--right_hand_topic", type=str, default="/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory")
-parser.add_argument("--left_arm_topic", type=str, default="/leader/joint_trajectory_command_broadcaster_left/joint_trajectory")
-parser.add_argument("--left_hand_topic", type=str, default="/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory")
-parser.add_argument("--head_topic", type=str, default="/leader/joystick_controller_left/joint_trajectory")
-parser.add_argument("--lift_topic", type=str, default="/leader/joystick_controller_right/joint_trajectory")
-parser.add_argument("--disable_left", action="store_true", help="Do not subscribe to left arm/hand topics.")
-parser.add_argument("--disable_head_lift", action="store_true", help="Do not subscribe to head/lift topics.")
-parser.add_argument("--joint_states_topic", type=str, default="/joint_states")
-parser.add_argument("--tf_topic", type=str, default="/tf")
-parser.add_argument("--base_frame", type=str, default="base_link")
-parser.add_argument("--publish_hz", type=float, default=60.0)
-parser.add_argument("--step_hz", type=float, default=120.0)
-parser.add_argument("--usd_path", type=str, default=None, help="Override the default FFW_SH5.usd path.")
-parser.add_argument("--robot_x", type=float, default=0.0, help="Initial robot x position.")
-parser.add_argument("--robot_y", type=float, default=0.0, help="Initial robot y position.")
-parser.add_argument("--robot_z", type=float, default=-0.18, help="Initial robot z position. Use a negative value if the USD floats above the ground.")
-parser.add_argument("--lift_init_pos", type=float, default=0.0, help="Initial lift_joint position.")
+parser.add_argument("--disable_head", action="store_true", help="Do not subscribe to the head topic.")
+parser.add_argument("--disable_lift", action="store_true", help="Do not subscribe to the lift topic.")
 parser.add_argument("--domain_id", type=int, default=None, help="DDS domain id. Defaults to ROS_DOMAIN_ID or 0.")
 parser.add_argument("--enable_gravity", action="store_true", help="Enable gravity on the SH5 rigid bodies.")
-parser.add_argument(
-    "--articulation_root_prim_path",
-    type=str,
-    default="/base_link/base_link",
-    help="Articulation root path inside the loaded SH5 USD.",
-)
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -68,6 +61,7 @@ simulation_app = app_launcher.app
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
+from cyclonedds.core import Qos, Policy
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
@@ -86,6 +80,14 @@ from robotis_lab.assets.robots import FFW_SH5_CFG
 
 def _default_sh5_usd_path() -> str:
     return FFW_SH5_CFG.spawn.usd_path
+
+
+def _trajectory_qos() -> Qos:
+    return Qos(
+        Policy.Reliability.BestEffort,
+        Policy.Durability.Volatile,
+        Policy.History.KeepLast(10),
+    )
 
 
 @configclass
@@ -107,6 +109,7 @@ class SH5DdsBridge:
         joint_states_topic: str,
         tf_topic: str,
         base_frame: str,
+        trajectory_qos: Qos,
     ):
         self.robot = robot
         self.base_frame = base_frame
@@ -129,7 +132,7 @@ class SH5DdsBridge:
         for label, topic_name in topic_names.items():
             if not topic_name:
                 continue
-            reader = topic_manager.topic_reader(topic_name=topic_name, topic_type=JointTrajectory_)
+            reader = topic_manager.topic_reader(topic_name=topic_name, topic_type=JointTrajectory_, qos=trajectory_qos)
             thread = threading.Thread(
                 target=self._trajectory_loop,
                 args=(label, reader),
@@ -290,15 +293,15 @@ class SH5DdsBridge:
 
 def _enabled_topics() -> dict[str, str]:
     topics = {
-        "right_arm": args_cli.right_arm_topic,
-        "right_hand": args_cli.right_hand_topic,
+        "right_arm": RIGHT_ARM_TOPIC,
+        "right_hand": RIGHT_HAND_TOPIC,
+        "left_arm": LEFT_ARM_TOPIC,
+        "left_hand": LEFT_HAND_TOPIC,
     }
-    if not args_cli.disable_left:
-        topics["left_arm"] = args_cli.left_arm_topic
-        topics["left_hand"] = args_cli.left_hand_topic
-    if not args_cli.disable_head_lift:
-        topics["head"] = args_cli.head_topic
-        topics["lift"] = args_cli.lift_topic
+    if not args_cli.disable_head:
+        topics["head"] = HEAD_TOPIC
+    if not args_cli.disable_lift:
+        topics["lift"] = LIFT_TOPIC
     return topics
 
 
@@ -309,11 +312,18 @@ def _print_joint_groups(joint_names: Iterable[str]):
         print(f"  - {name}")
 
 
+def _write_default_joint_state(robot):
+    default_joint_pos = robot.data.default_joint_pos.clone()
+    default_joint_vel = robot.data.default_joint_vel.clone()
+    robot.write_joint_state_to_sim(default_joint_pos, default_joint_vel)
+    robot.set_joint_position_target(default_joint_pos)
+
+
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, bridge: SH5DdsBridge):
     robot = scene["robot"]
     sim_dt = sim.get_physics_dt()
-    step_period = 1.0 / args_cli.step_hz if args_cli.step_hz > 0 else 0.0
-    publish_period = 1.0 / args_cli.publish_hz if args_cli.publish_hz > 0 else 0.0
+    step_period = 1.0 / STEP_HZ if STEP_HZ > 0 else 0.0
+    publish_period = 1.0 / PUBLISH_HZ if PUBLISH_HZ > 0 else 0.0
     last_publish = 0.0
     last_step = time.time()
 
@@ -338,22 +348,20 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, bri
 
 
 def main():
-    usd_path = args_cli.usd_path or _default_sh5_usd_path()
+    usd_path = _default_sh5_usd_path()
     if not os.path.exists(usd_path):
         raise FileNotFoundError(f"SH5 USD not found: {usd_path}")
 
-    sim_cfg = sim_utils.SimulationCfg(device=args_cli.device, dt=1.0 / args_cli.step_hz)
+    sim_cfg = sim_utils.SimulationCfg(device=args_cli.device, dt=1.0 / STEP_HZ)
     sim = sim_utils.SimulationContext(sim_cfg)
     sim.set_camera_view([2.8, -2.2, 1.8], [0.0, 0.0, 0.8])
 
     scene_cfg = SH5BringupSceneCfg(num_envs=1, env_spacing=2.0)
-    robot_pos = (args_cli.robot_x, args_cli.robot_y, args_cli.robot_z)
     robot_cfg = deepcopy(FFW_SH5_CFG)
     robot_cfg.spawn.usd_path = usd_path
     robot_cfg.spawn.rigid_props.disable_gravity = not args_cli.enable_gravity
-    robot_cfg.articulation_root_prim_path = args_cli.articulation_root_prim_path
-    robot_cfg.init_state.pos = robot_pos
-    robot_cfg.init_state.joint_pos["lift_joint"] = args_cli.lift_init_pos
+    robot_cfg.articulation_root_prim_path = ARTICULATION_ROOT_PRIM_PATH
+    robot_cfg.init_state.pos = ROBOT_POS
     scene_cfg.robot = robot_cfg.replace(prim_path="{ENV_REGEX_NS}/Robot")
     scene = InteractiveScene(scene_cfg)
 
@@ -362,8 +370,10 @@ def main():
     scene.update(sim.get_physics_dt())
 
     robot = scene["robot"]
-    robot.set_joint_position_target(robot.data.default_joint_pos.clone())
+    _write_default_joint_state(robot)
     scene.write_data_to_sim()
+    sim.step()
+    scene.update(sim.get_physics_dt())
     _print_joint_groups(robot.data.joint_names)
 
     domain_id = args_cli.domain_id if args_cli.domain_id is not None else int(os.getenv("ROS_DOMAIN_ID", 0))
@@ -372,14 +382,16 @@ def main():
         robot=robot,
         topic_manager=topic_manager,
         topic_names=_enabled_topics(),
-        joint_states_topic=args_cli.joint_states_topic,
-        tf_topic=args_cli.tf_topic,
-        base_frame=args_cli.base_frame,
+        joint_states_topic=JOINT_STATES_TOPIC,
+        tf_topic=TF_TOPIC,
+        base_frame=BASE_FRAME,
+        trajectory_qos=_trajectory_qos(),
     )
 
     print(f"[INFO] FFW SH5 DDS bringup ready. ROS_DOMAIN_ID={domain_id}")
-    print(f"[DDS] Publishing joint states: {args_cli.joint_states_topic}")
-    print(f"[DDS] Publishing TF: {args_cli.tf_topic} ({args_cli.base_frame} -> robot links)")
+    print("[DDS] JointTrajectory subscriber reliability: best_effort")
+    print(f"[DDS] Publishing joint states: {JOINT_STATES_TOPIC}")
+    print(f"[DDS] Publishing TF: {TF_TOPIC} ({BASE_FRAME} -> robot links)")
 
     try:
         run_simulator(sim, scene, bridge)

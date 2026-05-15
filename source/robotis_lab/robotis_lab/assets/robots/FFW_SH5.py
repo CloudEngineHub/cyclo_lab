@@ -46,6 +46,9 @@ FFW_SH5_CFG = ArticulationCfg(
             # Right arm joints
             **{f"arm_r_joint{i}": 0.0 for i in range(1, 8)},
 
+            **{f"arm_l_joint{4}": -1.57},
+            **{f"arm_r_joint{4}": -1.57},
+
             # Left and right hand joints
             **{f"finger_l_joint{i}": 0.0 for i in range(1, 21)},
             **{f"finger_r_joint{i}": 0.0 for i in range(1, 21)},
