@@ -23,10 +23,12 @@ Example:
 
 import argparse
 import os
+import sys
 import threading
 import time
 from collections.abc import Iterable
 from copy import deepcopy
+from pathlib import Path
 
 from isaaclab.app import AppLauncher
 
@@ -37,6 +39,7 @@ LEFT_ARM_TOPIC = "/leader/joint_trajectory_command_broadcaster_left/joint_trajec
 LEFT_HAND_TOPIC = "/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory"
 HEAD_TOPIC = "/leader/joystick_controller_left/joint_trajectory"
 LIFT_TOPIC = "/leader/joystick_controller_right/joint_trajectory"
+CMD_VEL_TOPIC = "/cmd_vel"
 JOINT_STATES_TOPIC = "/joint_states"
 TF_TOPIC = "/tf"
 BASE_FRAME = "base_link"
@@ -44,11 +47,45 @@ PUBLISH_HZ = 60.0
 STEP_HZ = 120.0
 ROBOT_POS = (0.0, 0.0, -0.18)
 ARTICULATION_ROOT_PRIM_PATH = "/base_link/base_link"
+SWERVE_STEERING_JOINTS = ("left_wheel_steer_joint", "right_wheel_steer_joint", "rear_wheel_steer_joint")
+SWERVE_WHEEL_JOINTS = ("left_wheel_drive_joint", "right_wheel_drive_joint", "rear_wheel_drive_joint")
+SWERVE_MODULE_X_OFFSETS = (0.18, 0.18, -0.18)
+SWERVE_MODULE_Y_OFFSETS = (0.18, -0.18, 0.0)
+SWERVE_MODULE_ANGLE_OFFSETS = (0.0, 0.0, 0.0)
+SWERVE_WHEEL_RADIUS = 0.05
+CMD_VEL_TIMEOUT = 0.1
+BASE_LINEAR_DAMPING = 2.0
+BASE_ANGULAR_DAMPING = 4.0
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 
 parser = argparse.ArgumentParser(description="FFW SH5 DDS bringup for Isaac Sim.")
 parser.add_argument("--disable_head", action="store_true", help="Do not subscribe to the head topic.")
 parser.add_argument("--disable_lift", action="store_true", help="Do not subscribe to the lift topic.")
+parser.add_argument("--disable_cmd_vel", action="store_true", help="Do not subscribe to cmd_vel for the swerve base.")
+parser.add_argument("--cmd_vel_topic", default=CMD_VEL_TOPIC, help="DDS geometry_msgs/Twist topic for the swerve base.")
+parser.add_argument("--cmd_vel_timeout", type=float, default=CMD_VEL_TIMEOUT, help="Seconds before stale cmd_vel is treated as zero.")
+parser.add_argument("--wheel_radius", type=float, default=SWERVE_WHEEL_RADIUS, help="Swerve wheel radius in meters.")
+parser.add_argument("--base_linear_damping", type=float, default=BASE_LINEAR_DAMPING, help="Rigid-body linear damping for the SH5 USD bodies.")
+parser.add_argument("--base_angular_damping", type=float, default=BASE_ANGULAR_DAMPING, help="Rigid-body angular damping for the SH5 USD bodies.")
+parser.add_argument(
+    "--swerve_module_x_offsets",
+    default=",".join(str(value) for value in SWERVE_MODULE_X_OFFSETS),
+    help="Comma-separated swerve module x offsets in meters.",
+)
+parser.add_argument(
+    "--swerve_module_y_offsets",
+    default=",".join(str(value) for value in SWERVE_MODULE_Y_OFFSETS),
+    help="Comma-separated swerve module y offsets in meters.",
+)
+parser.add_argument(
+    "--swerve_module_angle_offsets",
+    default=",".join(str(value) for value in SWERVE_MODULE_ANGLE_OFFSETS),
+    help="Comma-separated steering joint angle offsets in radians.",
+)
 parser.add_argument("--domain_id", type=int, default=None, help="DDS domain id. Defaults to ROS_DOMAIN_ID or 0.")
 parser.add_argument("--enable_gravity", action="store_true", help="Enable gravity on the SH5 rigid bodies.")
 
@@ -68,7 +105,7 @@ from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.utils import configclass
 
 from robotis_dds_python.idl.builtin_interfaces.msg import Time_
-from robotis_dds_python.idl.geometry_msgs.msg import Quaternion_, Transform_, TransformStamped_, Vector3_
+from robotis_dds_python.idl.geometry_msgs.msg import Quaternion_, Transform_, TransformStamped_, Twist_, Vector3_
 from robotis_dds_python.idl.sensor_msgs.msg import JointState_
 from robotis_dds_python.idl.std_msgs.msg import Header_
 from robotis_dds_python.idl.tf2_msgs.msg import TFMessage_
@@ -76,6 +113,7 @@ from robotis_dds_python.idl.trajectory_msgs.msg import JointTrajectory_
 from robotis_dds_python.tools.topic_manager import TopicManager
 
 from robotis_lab.assets.robots import FFW_SH5_CFG
+from common.swerve_drive import SwerveModule, compute_swerve_commands
 
 
 def _default_sh5_usd_path() -> str:
@@ -88,6 +126,16 @@ def _trajectory_qos() -> Qos:
         Policy.Durability.Volatile,
         Policy.History.KeepLast(10),
     )
+
+
+def _parse_float_list(value: str, expected_len: int, name: str) -> list[float]:
+    try:
+        parsed = [float(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a comma-separated float list: {value}") from exc
+    if len(parsed) != expected_len:
+        raise ValueError(f"{name} must contain {expected_len} values, got {len(parsed)}")
+    return parsed
 
 
 @configclass
@@ -110,14 +158,24 @@ class SH5DdsBridge:
         tf_topic: str,
         base_frame: str,
         trajectory_qos: Qos,
+        cmd_vel_topic: str | None,
+        swerve_modules: list[SwerveModule],
+        wheel_radius: float,
+        cmd_vel_timeout: float,
     ):
         self.robot = robot
         self.base_frame = base_frame
+        self.swerve_modules = swerve_modules
+        self.wheel_radius = wheel_radius
+        self.cmd_vel_timeout = cmd_vel_timeout
         self.running = True
         self.lock = threading.Lock()
         self.pending_positions: dict[str, float] = {}
+        self.latest_cmd_vel = (0.0, 0.0, 0.0)
+        self.last_cmd_vel_time = 0.0
         self.unknown_joints: set[str] = set()
         self._warned_missing_base_frame = False
+        self._warned_missing_swerve_joints: set[str] = set()
         self.readers = []
         self.threads = []
         self.joint_state_writer = topic_manager.topic_writer(
@@ -143,6 +201,18 @@ class SH5DdsBridge:
             thread.start()
             print(f"[DDS] Subscribing {label}: {topic_name}")
 
+        if cmd_vel_topic:
+            cmd_vel_reader = topic_manager.topic_reader(
+                topic_name=cmd_vel_topic,
+                topic_type=Twist_,
+                qos=trajectory_qos,
+            )
+            cmd_vel_thread = threading.Thread(target=self._cmd_vel_loop, args=(cmd_vel_reader,), daemon=True)
+            self.readers.append(cmd_vel_reader)
+            self.threads.append(cmd_vel_thread)
+            cmd_vel_thread.start()
+            print(f"[DDS] Subscribing cmd_vel: {cmd_vel_topic}")
+
     def _trajectory_loop(self, label: str, reader):
         try:
             while self.running:
@@ -151,6 +221,20 @@ class SH5DdsBridge:
                 time.sleep(0.001)
         except Exception as exc:
             print(f"[DDS] {label} subscriber exception: {exc}")
+        finally:
+            try:
+                reader.Close()
+            except Exception:
+                pass
+
+    def _cmd_vel_loop(self, reader):
+        try:
+            while self.running:
+                for msg in reader.take_iter():
+                    self._store_cmd_vel(msg)
+                time.sleep(0.001)
+        except Exception as exc:
+            print(f"[DDS] cmd_vel subscriber exception: {exc}")
         finally:
             try:
                 reader.Close()
@@ -175,14 +259,31 @@ class SH5DdsBridge:
         with self.lock:
             self.pending_positions.update(dict(zip(joint_names, positions)))
 
+    def _store_cmd_vel(self, msg):
+        if msg is None:
+            return
+        with self.lock:
+            self.latest_cmd_vel = (float(msg.linear.x), float(msg.linear.y), float(msg.angular.z))
+            self.last_cmd_vel_time = time.time()
+
+    def _current_cmd_vel(self) -> tuple[float, float, float]:
+        with self.lock:
+            command = self.latest_cmd_vel
+            last_msg_time = self.last_cmd_vel_time
+
+        if last_msg_time == 0.0:
+            return 0.0, 0.0, 0.0
+        if self.cmd_vel_timeout > 0.0 and time.time() - last_msg_time > self.cmd_vel_timeout:
+            return 0.0, 0.0, 0.0
+        return command
+
     def apply_latest_targets(self):
         with self.lock:
-            if not self.pending_positions:
-                return
             commands = dict(self.pending_positions)
 
         joint_names = self.robot.data.joint_names
-        target = self.robot.data.joint_pos_target.clone()
+        position_target = self.robot.data.joint_pos_target.clone()
+        velocity_target = self.robot.data.joint_vel_target.clone()
 
         for name, position in commands.items():
             if name not in joint_names:
@@ -191,9 +292,51 @@ class SH5DdsBridge:
                     print(f"[DDS] Joint '{name}' is not in the SH5 USD articulation; ignoring it.")
                 continue
             joint_id = joint_names.index(name)
-            target[:, joint_id] = float(position)
+            position_target[:, joint_id] = float(position)
 
-        self.robot.set_joint_position_target(target)
+        self._apply_swerve_targets(joint_names, position_target, velocity_target)
+
+        self.robot.set_joint_position_target(position_target)
+        self.robot.set_joint_velocity_target(velocity_target)
+
+    def _apply_swerve_targets(self, joint_names: list[str], position_target, velocity_target):
+        if not self.swerve_modules:
+            return
+
+        missing_joints = [
+            joint_name
+            for module in self.swerve_modules
+            for joint_name in (module.steering_joint, module.wheel_joint)
+            if joint_name not in joint_names
+        ]
+        for joint_name in missing_joints:
+            if joint_name not in self._warned_missing_swerve_joints:
+                self._warned_missing_swerve_joints.add(joint_name)
+                print(f"[DDS] Swerve joint '{joint_name}' is not in the SH5 USD articulation; ignoring cmd_vel.")
+        if missing_joints:
+            return
+
+        steering_joint_ids = [joint_names.index(module.steering_joint) for module in self.swerve_modules]
+        current_steering = [
+            float(value)
+            for value in self.robot.data.joint_pos[0, steering_joint_ids].detach().cpu().tolist()
+        ]
+        linear_x, linear_y, angular_z = self._current_cmd_vel()
+        module_commands = compute_swerve_commands(
+            linear_x,
+            linear_y,
+            angular_z,
+            self.swerve_modules,
+            self.wheel_radius,
+            current_steering_positions=current_steering,
+            optimize_steering=True,
+        )
+
+        for module_command in module_commands:
+            steering_id = joint_names.index(module_command.steering_joint)
+            wheel_id = joint_names.index(module_command.wheel_joint)
+            position_target[:, steering_id] = module_command.steering_position
+            velocity_target[:, wheel_id] = module_command.wheel_velocity
 
     def publish_joint_states(self):
         now = time.time()
@@ -305,6 +448,27 @@ def _enabled_topics() -> dict[str, str]:
     return topics
 
 
+def _swerve_modules_from_args() -> list[SwerveModule]:
+    module_count = len(SWERVE_STEERING_JOINTS)
+    x_offsets = _parse_float_list(args_cli.swerve_module_x_offsets, module_count, "--swerve_module_x_offsets")
+    y_offsets = _parse_float_list(args_cli.swerve_module_y_offsets, module_count, "--swerve_module_y_offsets")
+    angle_offsets = _parse_float_list(
+        args_cli.swerve_module_angle_offsets,
+        module_count,
+        "--swerve_module_angle_offsets",
+    )
+    return [
+        SwerveModule(
+            steering_joint=steering_joint,
+            wheel_joint=wheel_joint,
+            x_offset=x_offsets[index],
+            y_offset=y_offsets[index],
+            angle_offset=angle_offsets[index],
+        )
+        for index, (steering_joint, wheel_joint) in enumerate(zip(SWERVE_STEERING_JOINTS, SWERVE_WHEEL_JOINTS))
+    ]
+
+
 def _print_joint_groups(joint_names: Iterable[str]):
     names = list(joint_names)
     print("[INFO] SH5 articulation joints:")
@@ -317,6 +481,7 @@ def _write_default_joint_state(robot):
     default_joint_vel = robot.data.default_joint_vel.clone()
     robot.write_joint_state_to_sim(default_joint_pos, default_joint_vel)
     robot.set_joint_position_target(default_joint_pos)
+    robot.set_joint_velocity_target(default_joint_vel)
 
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, bridge: SH5DdsBridge):
@@ -360,6 +525,8 @@ def main():
     robot_cfg = deepcopy(FFW_SH5_CFG)
     robot_cfg.spawn.usd_path = usd_path
     robot_cfg.spawn.rigid_props.disable_gravity = not args_cli.enable_gravity
+    robot_cfg.spawn.rigid_props.linear_damping = args_cli.base_linear_damping
+    robot_cfg.spawn.rigid_props.angular_damping = args_cli.base_angular_damping
     robot_cfg.articulation_root_prim_path = ARTICULATION_ROOT_PRIM_PATH
     robot_cfg.init_state.pos = ROBOT_POS
     scene_cfg.robot = robot_cfg.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -386,12 +553,18 @@ def main():
         tf_topic=TF_TOPIC,
         base_frame=BASE_FRAME,
         trajectory_qos=_trajectory_qos(),
+        cmd_vel_topic=None if args_cli.disable_cmd_vel else args_cli.cmd_vel_topic,
+        swerve_modules=[] if args_cli.disable_cmd_vel else _swerve_modules_from_args(),
+        wheel_radius=args_cli.wheel_radius,
+        cmd_vel_timeout=args_cli.cmd_vel_timeout,
     )
 
     print(f"[INFO] FFW SH5 DDS bringup ready. ROS_DOMAIN_ID={domain_id}")
     print("[DDS] JointTrajectory subscriber reliability: best_effort")
     print(f"[DDS] Publishing joint states: {JOINT_STATES_TOPIC}")
     print(f"[DDS] Publishing TF: {TF_TOPIC} ({BASE_FRAME} -> robot links)")
+    if not args_cli.disable_cmd_vel:
+        print(f"[DDS] Applying swerve cmd_vel: {args_cli.cmd_vel_topic}")
 
     try:
         run_simulator(sim, scene, bridge)

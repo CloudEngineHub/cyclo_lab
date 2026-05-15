@@ -23,6 +23,8 @@ FFW_SH5_CFG = ArticulationCfg(
         usd_path=f"{ROBOTIS_LAB_ASSETS_DATA_DIR}/robots/FFW/FFW_SH5.usd",
         rigid_props=RigidBodyPropertiesCfg(
             disable_gravity=True,
+            linear_damping=2.0,
+            angular_damping=4.0,
             max_depenetration_velocity=5.0,
         ),
         articulation_props=ArticulationRootPropertiesCfg(
@@ -36,10 +38,10 @@ FFW_SH5_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, -0.18),
         joint_pos={
-            # # Swerve base joints
-            # "left_wheel_drive": 0.0, "left_wheel_steer": 0.0,
-            # "right_wheel_drive": 0.0, "right_wheel_steer": 0.0,
-            # "rear_wheel_drive": 0.0, "rear_wheel_steer": 0.0,
+            # Swerve base joints
+            "left_wheel_drive_joint": 0.0, "left_wheel_steer_joint": 0.0,
+            "right_wheel_drive_joint": 0.0, "right_wheel_steer_joint": 0.0,
+            "rear_wheel_drive_joint": 0.0, "rear_wheel_steer_joint": 0.0,
 
             # Left arm joints
             **{f"arm_l_joint{i}": 0.0 for i in range(1, 8)},
@@ -63,17 +65,28 @@ FFW_SH5_CFG = ArticulationCfg(
     ),
     actuators={
         # Actuators for swerve base
-        # "base": ImplicitActuatorCfg(
-        #     joint_names_expr=[
-        #         "left_wheel_drive", "left_wheel_steer",
-        #         "right_wheel_drive", "right_wheel_steer",
-        #         "rear_wheel_drive", "rear_wheel_steer",
-        #     ],
-        #     velocity_limit_sim=30.0,
-        #     effort_limit_sim=100000.0,
-        #     stiffness=10000.0,
-        #     damping=100.0,
-        # ),
+        "base_steer": ImplicitActuatorCfg(
+            joint_names_expr=[
+                "left_wheel_steer_joint",
+                "right_wheel_steer_joint",
+                "rear_wheel_steer_joint",
+            ],
+            velocity_limit_sim=10.0,
+            effort_limit_sim=100000.0,
+            stiffness=10000.0,
+            damping=100.0,
+        ),
+        "base_drive": ImplicitActuatorCfg(
+            joint_names_expr=[
+                "left_wheel_drive_joint",
+                "right_wheel_drive_joint",
+                "rear_wheel_drive_joint",
+            ],
+            velocity_limit_sim=30.0,
+            effort_limit_sim=100000.0,
+            stiffness=0.0,
+            damping=500.0,
+        ),
 
         # Actuator for vertical lift joint
         "lift": ImplicitActuatorCfg(
