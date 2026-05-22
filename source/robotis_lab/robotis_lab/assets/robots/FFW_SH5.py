@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Howon Kim
 
 import re
 
@@ -241,21 +243,10 @@ FFW_SH5_CFG = ArticulationCfg(
                 "finger_r_joint[1-9]",
                 "finger_r_joint1[0-9]",
                 "finger_r_joint20",
-            ],  # effort 를 내릴거면 stiffness 를 매우 높게 해야 할 듯 
-            # velocity_limit_sim=50.0,  # 8.0
-            # effort_limit_sim=4.12,    # 1.03
-            # stiffness=600.0,   # 150.0
-            # damping=10.0,
- 
-            # base filter 적용 전
-            # velocity_limit_sim=30.0,  # 8.0
-            # effort_limit_sim=5.15,    # 1.03 * 4
-            # stiffness=600.0,   # 150.0
-            # damping=20.0,
-
-            velocity_limit_sim=30.0,  # 8.0
+            ],
+            velocity_limit_sim=30.0,  # 30.0
             effort_limit_sim=5.15,    # 1.03 * 4
-            stiffness=200.0,   # 150.0
+            stiffness=600.0,   # 200.0 : for safe
             damping=20.0,
         ),
 

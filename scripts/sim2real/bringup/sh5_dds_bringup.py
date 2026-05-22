@@ -5,21 +5,14 @@
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-
-"""Bring up the FFW SH5 USD model and control it from DDS JointTrajectory topics.
-
-* spawns the FFW_SH5 USD as an Isaac Lab articulation,
-* subscribes to retargeted JointTrajectory topics from Cyclo Control,
-* applies the latest received joint positions as simulation joint targets,
-* publishes the simulated robot state on ``/joint_states` , ``/tf``.
-
-Example:
-
-.. code-block:: bash
-
-    python scripts/sim2real/bringup/sh5_dds_bringup.py --enable_cameras
-
-"""
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Howon Kim
 
 import argparse
 import os
@@ -33,6 +26,9 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 
+# ========== Setup ==========
+
+# Fixed bringup configuration
 RIGHT_ARM_TOPIC = "/leader/joint_trajectory_command_broadcaster_right/joint_trajectory"
 RIGHT_HAND_TOPIC = "/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory"
 LEFT_ARM_TOPIC = "/leader/joint_trajectory_command_broadcaster_left/joint_trajectory"
@@ -45,9 +41,11 @@ JOINT_STATES_TOPIC = "/joint_states"
 TF_TOPIC = "/tf"
 BASE_FRAME = "base_link"
 PUBLISH_HZ = 30.0
-STEP_HZ = 30.0
-RENDER_INTERVAL = 1
+STEP_HZ = 60.0
+RENDER_INTERVAL = 2
 ROBOT_POS = (0.0, 0.0, -0.18)
+# ROBOT_POS = (-2.5, -0.5, -0.1)  # for warehouse environment
+# ROBOT_POS = (1.0, -1.0, -0.08)  # for kitchen environment
 ARTICULATION_ROOT_PRIM_PATH = "/base_link/base_link"
 SWERVE_STEERING_JOINTS = ("left_wheel_steer_joint", "right_wheel_steer_joint", "rear_wheel_steer_joint")
 SWERVE_WHEEL_JOINTS = ("left_wheel_drive_joint", "right_wheel_drive_joint", "rear_wheel_drive_joint")
@@ -58,8 +56,6 @@ SWERVE_WHEEL_RADIUS = 0.05
 CMD_VEL_TIMEOUT = 0.1
 BASE_LINEAR_DAMPING = 2.0
 BASE_ANGULAR_DAMPING = 4.0
-ENVIRONMENT_POS = (0.0, 0.0, 0.0)
-ENVIRONMENT_ROT = (1.0, 0.0, 0.0, 0.0)
 OVERVIEW_CAMERA_EYE = (2.8, -2.2, 1.8)
 OVERVIEW_CAMERA_TARGET = (0.0, 0.0, 0.8)
 CAMERA_CENTER_NAME = "Head_Camera"
@@ -71,69 +67,25 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-
+# CLI and app launch
 parser = argparse.ArgumentParser(description="FFW SH5 DDS bringup for Isaac Sim.")
 parser.add_argument("--disable_head", action="store_true", help="Do not subscribe to the head topic.")
 parser.add_argument("--disable_lift", action="store_true", help="Do not subscribe to the lift topic.")
-parser.add_argument("--lift_topic", default=LIFT_TOPIC, help="DDS trajectory topic for the lift joint.")
 parser.add_argument("--disable_cmd_vel", action="store_true", help="Do not subscribe to cmd_vel for the swerve base.")
-parser.add_argument("--cmd_vel_topic", default=CMD_VEL_TOPIC, help="DDS geometry_msgs/Twist topic for the swerve base.")
-parser.add_argument("--cmd_vel_timeout", type=float, default=CMD_VEL_TIMEOUT, help="Seconds before stale cmd_vel is treated as zero.")
-parser.add_argument("--wheel_radius", type=float, default=SWERVE_WHEEL_RADIUS, help="Swerve wheel radius in meters.")
 parser.add_argument("--base_linear_damping", type=float, default=BASE_LINEAR_DAMPING, help="Rigid-body linear damping for the SH5 USD bodies.")
 parser.add_argument("--base_angular_damping", type=float, default=BASE_ANGULAR_DAMPING, help="Rigid-body angular damping for the SH5 USD bodies.")
-parser.add_argument(
-    "--swerve_module_x_offsets",
-    default=",".join(str(value) for value in SWERVE_MODULE_X_OFFSETS),
-    help="Comma-separated swerve module x offsets in meters.",
-)
-parser.add_argument(
-    "--swerve_module_y_offsets",
-    default=",".join(str(value) for value in SWERVE_MODULE_Y_OFFSETS),
-    help="Comma-separated swerve module y offsets in meters.",
-)
-parser.add_argument(
-    "--swerve_module_angle_offsets",
-    default=",".join(str(value) for value in SWERVE_MODULE_ANGLE_OFFSETS),
-    help="Comma-separated steering joint angle offsets in radians.",
-)
 parser.add_argument("--domain_id", type=int, default=None, help="DDS domain id. Defaults to ROS_DOMAIN_ID or 0.")
 parser.add_argument("--enable_gravity", action="store_true", help="Enable gravity on the SH5 rigid bodies.")
 parser.add_argument(
     "--environment_usd",
     default=None,
-    help="USD file to spawn as the static environment. Defaults to source/robotis_lab/data/robots/table2.usd.",
+    help="USD file or URL to spawn as the static environment. Defaults to common.environment.DEFAULT_ENVIRONMENT_USD_PATH.",
 )
 parser.add_argument("--disable_environment", action="store_true", help="Do not spawn the environment USD.")
-parser.add_argument(
-    "--environment_pos",
-    default=",".join(str(value) for value in ENVIRONMENT_POS),
-    help="Comma-separated environment position in meters.",
-)
-parser.add_argument(
-    "--environment_rot",
-    default=",".join(str(value) for value in ENVIRONMENT_ROT),
-    help="Comma-separated environment quaternion as w,x,y,z.",
-)
 parser.add_argument(
     "--enable_camera_views",
     action="store_true",
     help="Open Isaac Sim viewport windows for overview, Head_Camera, Left_Camera, and Right_Camera.",
-)
-parser.add_argument(
-    "--camera_center_name",
-    default=CAMERA_CENTER_NAME,
-    help="USD camera prim name for the top-left center camera viewport.",
-)
-parser.add_argument(
-    "--camera_left_name",
-    default=CAMERA_LEFT_NAME,
-    help="USD camera prim name for the bottom-left camera viewport.",
-)
-parser.add_argument(
-    "--camera_right_name",
-    default=CAMERA_RIGHT_NAME,
-    help="USD camera prim name for the bottom-right camera viewport.",
 )
 
 AppLauncher.add_app_launcher_args(parser)
@@ -149,8 +101,6 @@ from cyclonedds.core import Qos, Policy
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
-from isaaclab.sim.spawners.from_files import from_files
-from isaaclab.sim.utils import bind_physics_material, clone
 from isaaclab.utils import configclass
 
 from robotis_dds_python.idl.builtin_interfaces.msg import Time_
@@ -161,55 +111,20 @@ from robotis_dds_python.idl.tf2_msgs.msg import TFMessage_
 from robotis_dds_python.idl.trajectory_msgs.msg import JointTrajectory_
 from robotis_dds_python.tools.topic_manager import TopicManager
 
-from robotis_lab.assets.robots import FFW_SH5_CFG, ROBOTIS_LAB_ASSETS_DATA_DIR
+from robotis_lab.assets.robots import FFW_SH5_CFG
+from common.environment import (
+    default_environment_usd_path,
+    is_simple_warehouse_environment,
+    is_remote_usd_path,
+    make_card_boxes_graspable,
+    make_environment_cfg,
+)
 from common.swerve_drive import SwerveModule, compute_swerve_commands
 
 
-ENVIRONMENT_PHYSICS_MATERIAL = sim_utils.RigidBodyMaterialCfg(
-    friction_combine_mode="max",
-    restitution_combine_mode="min",
-    static_friction=2.0,
-    dynamic_friction=1.8,
-    restitution=0.0,
-)
-
-
-@clone
-def spawn_environment_with_friction(prim_path, cfg, translation=None, orientation=None, **kwargs):
-    """Spawn the environment USD and bind a high-friction material to its collision geometry."""
-    prim = from_files.spawn_from_usd(prim_path, cfg, translation, orientation, **kwargs)
-
-    material_path = f"{prim_path}/environmentPhysicsMaterial"
-    ENVIRONMENT_PHYSICS_MATERIAL.func(material_path, ENVIRONMENT_PHYSICS_MATERIAL)
-    bind_physics_material(prim_path, material_path)
-
-    return prim
-
-
+# Scene setup
 def _default_sh5_usd_path() -> str:
     return FFW_SH5_CFG.spawn.usd_path
-
-
-def _default_environment_usd_path() -> str:
-    return f"{ROBOTIS_LAB_ASSETS_DATA_DIR}/robots/table2.usd"
-
-
-def _trajectory_qos() -> Qos:
-    return Qos(
-        Policy.Reliability.BestEffort,
-        Policy.Durability.Volatile,
-        Policy.History.KeepLast(10),
-    )
-
-
-def _parse_float_list(value: str, expected_len: int, name: str) -> list[float]:
-    try:
-        parsed = [float(item.strip()) for item in value.split(",") if item.strip()]
-    except ValueError as exc:
-        raise ValueError(f"{name} must be a comma-separated float list: {value}") from exc
-    if len(parsed) != expected_len:
-        raise ValueError(f"{name} must contain {expected_len} values, got {len(parsed)}")
-    return parsed
 
 
 @configclass
@@ -221,6 +136,40 @@ class SH5BringupSceneCfg(InteractiveSceneCfg):
     )
     environment: AssetBaseCfg = None
     robot: ArticulationCfg = None
+
+
+def _make_robot_cfg(usd_path: str) -> ArticulationCfg:
+    robot_cfg = deepcopy(FFW_SH5_CFG)
+    robot_cfg.spawn.usd_path = usd_path
+    robot_cfg.spawn.rigid_props.disable_gravity = not args_cli.enable_gravity
+    robot_cfg.spawn.rigid_props.linear_damping = args_cli.base_linear_damping
+    robot_cfg.spawn.rigid_props.angular_damping = args_cli.base_angular_damping
+    robot_cfg.articulation_root_prim_path = ARTICULATION_ROOT_PRIM_PATH
+    robot_cfg.init_state.pos = ROBOT_POS
+    return robot_cfg
+
+
+# ========== DDS Topic parsing and matching ==========
+def _trajectory_qos() -> Qos:
+    return Qos(
+        Policy.Reliability.BestEffort,
+        Policy.Durability.Volatile,
+        Policy.History.KeepLast(10),
+    )
+
+
+def _enabled_topics() -> dict[str, str]:
+    topics = {
+        "right_arm": RIGHT_ARM_TOPIC,
+        "right_hand": RIGHT_HAND_TOPIC,
+        "left_arm": LEFT_ARM_TOPIC,
+        "left_hand": LEFT_HAND_TOPIC,
+    }
+    if not args_cli.disable_head:
+        topics["head"] = HEAD_TOPIC
+    if not args_cli.disable_lift:
+        topics["lift"] = LIFT_TOPIC
+    return topics
 
 
 class SH5DdsBridge:
@@ -288,6 +237,7 @@ class SH5DdsBridge:
             cmd_vel_thread.start()
             print(f"[DDS] Subscribing cmd_vel: {cmd_vel_topic}")
 
+    # Run DDS reader loops
     def _trajectory_loop(self, label: str, reader):
         try:
             while self.running:
@@ -316,6 +266,7 @@ class SH5DdsBridge:
             except Exception:
                 pass
 
+    # Parse trajectory topics and match joints
     def _store_trajectory(self, label: str, msg):
         if msg is None or not msg.points:
             return
@@ -346,6 +297,7 @@ class SH5DdsBridge:
         with self.lock:
             self.pending_positions.update(dict(zip(joint_names, positions)))
 
+    # Apply swerve drive mobile base command
     def _store_cmd_vel(self, msg):
         if msg is None:
             return
@@ -425,6 +377,7 @@ class SH5DdsBridge:
             position_target[:, steering_id] = module_command.steering_position
             velocity_target[:, wheel_id] = module_command.wheel_velocity
 
+    # Publish robot state and close DDS resources
     def publish_joint_states(self):
         now = time.time()
         stamp = Time_(sec=int(now), nanosec=int((now - int(now)) * 1_000_000_000))
@@ -521,41 +474,23 @@ class SH5DdsBridge:
             pass
 
 
-def _enabled_topics() -> dict[str, str]:
-    topics = {
-        "right_arm": RIGHT_ARM_TOPIC,
-        "right_hand": RIGHT_HAND_TOPIC,
-        "left_arm": LEFT_ARM_TOPIC,
-        "left_hand": LEFT_HAND_TOPIC,
-    }
-    if not args_cli.disable_head:
-        topics["head"] = HEAD_TOPIC
-    if not args_cli.disable_lift:
-        topics["lift"] = args_cli.lift_topic
-    return topics
+# ========== Robot State ==========
 
-
-def _swerve_modules_from_args() -> list[SwerveModule]:
-    module_count = len(SWERVE_STEERING_JOINTS)
-    x_offsets = _parse_float_list(args_cli.swerve_module_x_offsets, module_count, "--swerve_module_x_offsets")
-    y_offsets = _parse_float_list(args_cli.swerve_module_y_offsets, module_count, "--swerve_module_y_offsets")
-    angle_offsets = _parse_float_list(
-        args_cli.swerve_module_angle_offsets,
-        module_count,
-        "--swerve_module_angle_offsets",
-    )
+# Swerve module configuration
+def _swerve_modules() -> list[SwerveModule]:
     return [
         SwerveModule(
             steering_joint=steering_joint,
             wheel_joint=wheel_joint,
-            x_offset=x_offsets[index],
-            y_offset=y_offsets[index],
-            angle_offset=angle_offsets[index],
+            x_offset=SWERVE_MODULE_X_OFFSETS[index],
+            y_offset=SWERVE_MODULE_Y_OFFSETS[index],
+            angle_offset=SWERVE_MODULE_ANGLE_OFFSETS[index],
         )
         for index, (steering_joint, wheel_joint) in enumerate(zip(SWERVE_STEERING_JOINTS, SWERVE_WHEEL_JOINTS))
     ]
 
 
+# Robot state initialization
 def _print_joint_groups(joint_names: Iterable[str]):
     names = list(joint_names)
     print("[INFO] SH5 articulation joints:")
@@ -571,38 +506,13 @@ def _write_default_joint_state(robot):
     robot.set_joint_velocity_target(default_joint_vel)
 
 
-def _find_child_prim_by_name(stage, root_path: str, prim_name: str):
-    root_path = root_path.rstrip("/")
-    for prim in stage.Traverse():
-        prim_path = str(prim.GetPath())
-        if prim_path.startswith(root_path) and prim.GetName() == prim_name:
-            return prim
-    return None
-
+# ========== Camera View ==========
 
 def _find_camera_prim_by_name(stage, prim_name: str):
     for prim in stage.Traverse():
         if prim.GetName() == prim_name and prim.GetTypeName() == "Camera":
             return prim
     return None
-
-
-def _create_camera_prim(camera_path: str, translation=None, orientation=None):
-    import isaacsim.core.utils.prims as prim_utils
-
-    if not prim_utils.is_prim_path_valid(camera_path):
-        prim = prim_utils.create_prim(camera_path, "Camera", translation=translation, orientation=orientation)
-    else:
-        prim = prim_utils.get_prim_at_path(camera_path)
-
-    prim.GetAttribute("focalLength").Set(18.0)
-    prim.GetAttribute("horizontalAperture").Set(20.955)
-    clipping_attr = prim.GetAttribute("clippingRange")
-    if clipping_attr and clipping_attr.IsValid():
-        clipping_attr.Set((0.05, 100.0))
-
-    _ensure_camera_viewport_attrs(prim)
-    return prim
 
 
 def _ensure_camera_viewport_attrs(camera_prim):
@@ -666,15 +576,15 @@ def _set_viewport_camera(
     return False
 
 
-def _setup_camera_views(scene: InteractiveScene):
+def _setup_camera_views():
     from isaacsim.core.utils.stage import get_current_stage
 
     stage = get_current_stage()
 
     camera_specs = (
-        ("Center Camera", args_cli.camera_center_name, 520, 330, 50, 20),
-        ("Left Camera", args_cli.camera_left_name, 258, 200, 50, 350),
-        ("Right Camera", args_cli.camera_right_name, 258, 200, 312, 350),
+        ("Center Camera", CAMERA_CENTER_NAME, 520, 330, 50, 20),
+        ("Left Camera", CAMERA_LEFT_NAME, 258, 200, 50, 350),
+        ("Right Camera", CAMERA_RIGHT_NAME, 258, 200, 312, 350),
     )
     camera_paths: dict[str, str] = {}
     missing_camera_names: list[str] = []
@@ -700,8 +610,8 @@ def _setup_camera_views(scene: InteractiveScene):
         print(f"[WARN] Available cameras: {available_cameras}")
 
 
+# Simulation loop
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, bridge: SH5DdsBridge):
-    robot = scene["robot"]
     sim_dt = sim.get_physics_dt()
     step_period = 1.0 / STEP_HZ if STEP_HZ > 0 else 0.0
     publish_period = 1.0 / PUBLISH_HZ if PUBLISH_HZ > 0 else 0.0
@@ -733,8 +643,12 @@ def main():
     if not os.path.exists(usd_path):
         raise FileNotFoundError(f"SH5 USD not found: {usd_path}")
 
-    environment_usd_path = args_cli.environment_usd or _default_environment_usd_path()
-    if not args_cli.disable_environment and not os.path.exists(environment_usd_path):
+    environment_usd_path = args_cli.environment_usd or default_environment_usd_path()
+    if (
+        not args_cli.disable_environment
+        and not is_remote_usd_path(environment_usd_path)
+        and not os.path.exists(environment_usd_path)
+    ):
         raise FileNotFoundError(f"Environment USD not found: {environment_usd_path}")
 
     sim_cfg = sim_utils.SimulationCfg(
@@ -743,34 +657,15 @@ def main():
         render_interval=RENDER_INTERVAL,
     )
     sim = sim_utils.SimulationContext(sim_cfg)
-    sim.set_camera_view([2.8, -2.2, 1.8], [0.0, 0.0, 0.8])
+    sim.set_camera_view(OVERVIEW_CAMERA_EYE, OVERVIEW_CAMERA_TARGET)
 
     scene_cfg = SH5BringupSceneCfg(num_envs=1, env_spacing=2.0)
     if not args_cli.disable_environment:
-        scene_cfg.environment = AssetBaseCfg(
-            prim_path="{ENV_REGEX_NS}/Environment",
-            spawn=sim_utils.UsdFileCfg(
-                func=spawn_environment_with_friction,
-                usd_path=environment_usd_path,
-                collision_props=sim_utils.CollisionPropertiesCfg(
-                    contact_offset=0.003,
-                    rest_offset=0.0,
-                ),
-            ),
-            init_state=AssetBaseCfg.InitialStateCfg(
-                pos=_parse_float_list(args_cli.environment_pos, 3, "--environment_pos"),
-                rot=_parse_float_list(args_cli.environment_rot, 4, "--environment_rot"),
-            ),
-        )
-    robot_cfg = deepcopy(FFW_SH5_CFG)
-    robot_cfg.spawn.usd_path = usd_path
-    robot_cfg.spawn.rigid_props.disable_gravity = not args_cli.enable_gravity
-    robot_cfg.spawn.rigid_props.linear_damping = args_cli.base_linear_damping
-    robot_cfg.spawn.rigid_props.angular_damping = args_cli.base_angular_damping
-    robot_cfg.articulation_root_prim_path = ARTICULATION_ROOT_PRIM_PATH
-    robot_cfg.init_state.pos = ROBOT_POS
-    scene_cfg.robot = robot_cfg.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        scene_cfg.environment = make_environment_cfg(environment_usd_path)
+    scene_cfg.robot = _make_robot_cfg(usd_path).replace(prim_path="{ENV_REGEX_NS}/Robot")
     scene = InteractiveScene(scene_cfg)
+    if not args_cli.disable_environment and is_simple_warehouse_environment(environment_usd_path):
+        make_card_boxes_graspable()
 
     sim.reset()
     scene.reset()
@@ -783,7 +678,7 @@ def main():
     scene.update(sim.get_physics_dt())
     _print_joint_groups(robot.data.joint_names)
     if args_cli.enable_camera_views:
-        _setup_camera_views(scene)
+        _setup_camera_views()
 
     domain_id = args_cli.domain_id if args_cli.domain_id is not None else int(os.getenv("ROS_DOMAIN_ID", 0))
     topic_manager = TopicManager(domain_id=domain_id)
@@ -795,10 +690,10 @@ def main():
         tf_topic=TF_TOPIC,
         base_frame=BASE_FRAME,
         trajectory_qos=_trajectory_qos(),
-        cmd_vel_topic=None if args_cli.disable_cmd_vel else args_cli.cmd_vel_topic,
-        swerve_modules=[] if args_cli.disable_cmd_vel else _swerve_modules_from_args(),
-        wheel_radius=args_cli.wheel_radius,
-        cmd_vel_timeout=args_cli.cmd_vel_timeout,
+        cmd_vel_topic=None if args_cli.disable_cmd_vel else CMD_VEL_TOPIC,
+        swerve_modules=[] if args_cli.disable_cmd_vel else _swerve_modules(),
+        wheel_radius=SWERVE_WHEEL_RADIUS,
+        cmd_vel_timeout=CMD_VEL_TIMEOUT,
     )
 
     print(f"[INFO] FFW SH5 DDS bringup ready. ROS_DOMAIN_ID={domain_id}")
@@ -808,7 +703,7 @@ def main():
     print(f"[DDS] Publishing joint states: {JOINT_STATES_TOPIC}")
     print(f"[DDS] Publishing TF: {TF_TOPIC} ({BASE_FRAME} -> robot links)")
     if not args_cli.disable_cmd_vel:
-        print(f"[DDS] Applying swerve cmd_vel: {args_cli.cmd_vel_topic}")
+        print(f"[DDS] Applying swerve cmd_vel: {CMD_VEL_TOPIC}")
 
     try:
         run_simulator(sim, scene, bridge)
