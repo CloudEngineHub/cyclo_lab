@@ -39,9 +39,7 @@ LIFT_JOINT_NAME = "lift_joint"
 CMD_VEL_TOPIC = "/cmd_vel"
 JOINT_STATES_TOPIC = "/joint_states"
 TF_TOPIC = "/tf"
-ODOM_TOPIC = "/odom"
 BASE_FRAME = "base_link"
-ODOM_FRAME = "odom"
 PUBLISH_HZ = 30.0
 STEP_HZ = 60.0
 RENDER_INTERVAL = 2
@@ -111,17 +109,12 @@ from isaaclab.utils import configclass
 
 from robotis_dds_python.idl.builtin_interfaces.msg import Time_
 from robotis_dds_python.idl.geometry_msgs.msg import (
-    Point_,
-    Pose_,
-    PoseWithCovariance_,
     Quaternion_,
     Transform_,
     TransformStamped_,
     Twist_,
-    TwistWithCovariance_,
     Vector3_,
 )
-from robotis_dds_python.idl.nav_msgs.msg import Odometry_
 from robotis_dds_python.idl.sensor_msgs.msg import JointState_
 from robotis_dds_python.idl.std_msgs.msg import Header_
 from robotis_dds_python.idl.tf2_msgs.msg import TFMessage_
@@ -137,7 +130,6 @@ from common.environment import (
     make_environment_cfg,
 )
 from common.swerve_drive import SwerveDriveController, SwerveModule
-from common.odometry import SwerveOdometry, yaw_to_quaternion
 
 
 # Scene setup
@@ -190,13 +182,6 @@ def _enabled_topics() -> dict[str, str]:
     return topics
 
 
-def _diagonal_covariance(diagonal: list[float]) -> list[float]:
-    covariance = [0.0] * 36
-    for index, value in enumerate(diagonal):
-        covariance[6 * index + index] = float(value)
-    return covariance
-
-
 class SH5DdsBridge:
     def __init__(
         self,
@@ -205,7 +190,6 @@ class SH5DdsBridge:
         topic_names: dict[str, str],
         joint_states_topic: str,
         tf_topic: str,
-        odom_topic: str,
         base_frame: str,
         trajectory_qos: Qos,
         cmd_vel_topic: str | None,
@@ -215,24 +199,13 @@ class SH5DdsBridge:
     ):
         self.robot = robot
         self.base_frame = base_frame
-        self.odom_frame = ODOM_FRAME
         self.swerve_modules = swerve_modules
         self.wheel_radius = wheel_radius
         self.cmd_vel_timeout = cmd_vel_timeout
         self.swerve_controller = (
             SwerveDriveController(swerve_modules, wheel_radius) if swerve_modules else None
         )
-        self.swerve_odometry = (
-            SwerveOdometry(
-                [module.x_offset for module in swerve_modules],
-                [module.y_offset for module in swerve_modules],
-                wheel_radius,
-            )
-            if swerve_modules
-            else None
-        )
         self._last_swerve_update_time = time.monotonic()
-        self._last_odom_update_time = time.monotonic()
         self.running = True
         self.lock = threading.Lock()
         self.pending_positions: dict[str, float] = {}
@@ -250,10 +223,6 @@ class SH5DdsBridge:
         self.tf_writer = topic_manager.topic_writer(
             topic_name=tf_topic,
             topic_type=TFMessage_,
-        )
-        self.odom_writer = topic_manager.topic_writer(
-            topic_name=odom_topic,
-            topic_type=Odometry_,
         )
 
         for label, topic_name in topic_names.items():
@@ -474,19 +443,6 @@ class SH5DdsBridge:
         base_quat_w = base_pose_w[3:7].unsqueeze(0)
 
         transforms = []
-        if self.swerve_odometry is not None:
-            odom_state = self.swerve_odometry.state()
-            qx, qy, qz, qw = yaw_to_quaternion(odom_state.yaw)
-            transforms.append(
-                TransformStamped_(
-                    header=Header_(stamp=stamp, frame_id=self.odom_frame),
-                    child_frame_id=self.base_frame,
-                    transform=Transform_(
-                        translation=Vector3_(x=odom_state.x, y=odom_state.y, z=0.0),
-                        rotation=Quaternion_(x=qx, y=qy, z=qz, w=qw),
-                    ),
-                )
-            )
         for body_id, child_frame in enumerate(body_names):
             if child_frame == self.base_frame:
                 continue
@@ -522,67 +478,6 @@ class SH5DdsBridge:
         except Exception as exc:
             print(f"[DDS] tf write error: {exc}")
 
-    def publish_odometry(self):
-        if not self.swerve_modules or self.swerve_odometry is None:
-            return
-
-        joint_names = list(self.robot.data.joint_names)
-        missing_joints = [
-            joint_name
-            for module in self.swerve_modules
-            for joint_name in (module.steering_joint, module.wheel_joint)
-            if joint_name not in joint_names
-        ]
-        if missing_joints:
-            return
-
-        steering_joint_ids = [joint_names.index(module.steering_joint) for module in self.swerve_modules]
-        wheel_joint_ids = [joint_names.index(module.wheel_joint) for module in self.swerve_modules]
-        steering_positions = [
-            float(value) + self.swerve_modules[index].angle_offset
-            for index, value in enumerate(
-                self.robot.data.joint_pos[0, steering_joint_ids].detach().cpu().tolist()
-            )
-        ]
-        wheel_velocities = [
-            float(value)
-            for value in self.robot.data.joint_vel[0, wheel_joint_ids].detach().cpu().tolist()
-        ]
-
-        now_monotonic = time.monotonic()
-        dt = now_monotonic - self._last_odom_update_time
-        self._last_odom_update_time = now_monotonic
-        if not self.swerve_odometry.update(steering_positions, wheel_velocities, dt):
-            return
-
-        now = time.time()
-        stamp = Time_(sec=int(now), nanosec=int((now - int(now)) * 1_000_000_000))
-        state = self.swerve_odometry.state()
-        qx, qy, qz, qw = yaw_to_quaternion(state.yaw)
-
-        msg = Odometry_(
-            header=Header_(stamp=stamp, frame_id=self.odom_frame),
-            child_frame_id=self.base_frame,
-            pose=PoseWithCovariance_(
-                pose=Pose_(
-                    position=Point_(x=state.x, y=state.y, z=0.0),
-                    orientation=Quaternion_(x=qx, y=qy, z=qz, w=qw),
-                ),
-                covariance=_diagonal_covariance([0.001, 0.001, 1.0e6, 1.0e6, 1.0e6, 0.01]),
-            ),
-            twist=TwistWithCovariance_(
-                twist=Twist_(
-                    linear=Vector3_(x=state.vx, y=state.vy, z=0.0),
-                    angular=Vector3_(x=0.0, y=0.0, z=state.wz),
-                ),
-                covariance=_diagonal_covariance([0.001, 0.001, 1.0e6, 1.0e6, 1.0e6, 0.01]),
-            ),
-        )
-        try:
-            self.odom_writer.write(msg)
-        except Exception as exc:
-            print(f"[DDS] odom write error: {exc}")
-
     def shutdown(self):
         self.running = False
         for thread in self.threads:
@@ -598,10 +493,6 @@ class SH5DdsBridge:
             pass
         try:
             self.tf_writer.Close()
-        except Exception:
-            pass
-        try:
-            self.odom_writer.Close()
         except Exception:
             pass
 
@@ -763,7 +654,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, bri
         now = time.time()
         if publish_period == 0.0 or now - last_publish >= publish_period:
             bridge.publish_joint_states()
-            bridge.publish_odometry()
             bridge.publish_tf()
             last_publish = now
 
@@ -825,7 +715,6 @@ def main():
         topic_names=_enabled_topics(),
         joint_states_topic=JOINT_STATES_TOPIC,
         tf_topic=TF_TOPIC,
-        odom_topic=ODOM_TOPIC,
         base_frame=BASE_FRAME,
         trajectory_qos=_trajectory_qos(),
         cmd_vel_topic=None if args_cli.disable_cmd_vel else CMD_VEL_TOPIC,
@@ -839,7 +728,6 @@ def main():
         print(f"[INFO] Environment USD: {environment_usd_path}")
     print("[DDS] JointTrajectory subscriber reliability: best_effort")
     print(f"[DDS] Publishing joint states: {JOINT_STATES_TOPIC}")
-    print(f"[DDS] Publishing odometry: {ODOM_TOPIC} ({ODOM_FRAME} -> {BASE_FRAME})")
     print(f"[DDS] Publishing TF: {TF_TOPIC} ({BASE_FRAME} -> robot links)")
     if not args_cli.disable_cmd_vel:
         print(f"[DDS] Applying swerve cmd_vel: {CMD_VEL_TOPIC}")
