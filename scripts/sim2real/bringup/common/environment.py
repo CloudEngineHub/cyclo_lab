@@ -14,12 +14,7 @@
 #
 # Author: Howon Kim
 
-"""Environment and map setup helpers for bringup scripts."""
-
 from __future__ import annotations
-
-from pathlib import Path
-from urllib.parse import urlparse
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import AssetBaseCfg
@@ -27,22 +22,11 @@ from isaaclab.sim.spawners.from_files import from_files
 from isaaclab.sim.utils import bind_physics_material, clone, make_uninstanceable
 from isaacsim.core.utils.stage import get_current_stage
 
-from robotis_lab.assets.robots import ROBOTIS_LAB_ASSETS_DATA_DIR
 
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
 SIMPLE_WAREHOUSE_ENVIRONMENT_USD_PATH = (
     "https://omniverse-content-production.s3-us-west-2.amazonaws.com/"
     "Assets/Isaac/5.1/Isaac/Environments/Simple_Warehouse/warehouse_multiple_shelves.usd"
 )
-TABLE2_ENVIRONMENT_USD_PATH = f"{ROBOTIS_LAB_ASSETS_DATA_DIR}/robots/table2.usd"
-LIGHTWHEEL_KITCHEN_ENVIRONMENT_USD_PATH = str(
-    REPO_ROOT / "third_party/Lightwheel_Kitchen/Collected_KitchenRoom/KitchenRoom.usd"
-)
-
-# DEFAULT_ENVIRONMENT_USD_PATH = TABLE2_ENVIRONMENT_USD_PATH
-DEFAULT_ENVIRONMENT_USD_PATH = SIMPLE_WAREHOUSE_ENVIRONMENT_USD_PATH
-# DEFAULT_ENVIRONMENT_USD_PATH = LIGHTWHEEL_KITCHEN_ENVIRONMENT_USD_PATH
 
 ENVIRONMENT_SCALE = 0.7  # 1.0 for table, 0.7 for warehouse, 1.2 for kitchen
 ENVIRONMENT_POS = (0.0, 0.0, 0.0)
@@ -74,28 +58,16 @@ def spawn_environment_with_friction(prim_path, cfg, translation=None, orientatio
     return prim
 
 
-def default_environment_usd_path() -> str:
-    return DEFAULT_ENVIRONMENT_USD_PATH
-
-
-def remote_usd_path(usd_path: str) -> bool:
-    return urlparse(usd_path).scheme in ("http", "https", "omniverse")
-
-
-def simple_warehouse_environment(usd_path: str) -> bool:
-    return usd_path == SIMPLE_WAREHOUSE_ENVIRONMENT_USD_PATH
-
-
 def environment_scale() -> tuple[float, float, float]:
     return (ENVIRONMENT_SCALE, ENVIRONMENT_SCALE, ENVIRONMENT_SCALE)
 
 
-def make_environment_cfg(environment_usd_path: str) -> AssetBaseCfg:
+def make_simple_warehouse_environment_cfg() -> AssetBaseCfg:
     return AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/Environment",
         spawn=sim_utils.UsdFileCfg(
             func=spawn_environment_with_friction,
-            usd_path=environment_usd_path,
+            usd_path=SIMPLE_WAREHOUSE_ENVIRONMENT_USD_PATH,
             scale=environment_scale(),
             collision_props=sim_utils.CollisionPropertiesCfg(
                 contact_offset=0.003,
@@ -110,6 +82,7 @@ def make_environment_cfg(environment_usd_path: str) -> AssetBaseCfg:
 
 
 def make_card_boxes_graspable():
+    """Apply rigid body, mass, and collision properties to selected warehouse card boxes."""
     stage = get_current_stage()
     rigid_props = sim_utils.RigidBodyPropertiesCfg(
         rigid_body_enabled=True,

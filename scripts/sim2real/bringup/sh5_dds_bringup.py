@@ -14,8 +14,6 @@
 #
 # Author: Howon Kim
 
-"""FFW SH5 DDS bringup for Isaac Sim."""
-
 import argparse
 import os
 import sys
@@ -41,9 +39,8 @@ BASE_FRAME = "base_link"
 PUBLISH_HZ = 30.0
 STEP_HZ = 60.0
 RENDER_INTERVAL = 2
-# ROBOT_POS = (0.4, 0.0, -0.18)
-ROBOT_POS = (-1.25, -0.5, -0.1)  # for warehouse environment
-# ROBOT_POS = (1.3, 1.5, -0.08)  # for kitchen environment
+ROBOT_POS = (0.0, 0.0, -0.18) 
+# ROBOT_POS = (-1.25, -0.5, -0.1)  # for warehouse environment
 SWERVE_STEERING_LIMIT_LOWER = -1.570796
 SWERVE_STEERING_LIMIT_UPPER = 1.570796
 SWERVE_WHEEL_SPEED_LIMIT_LOWER = -50.0
@@ -67,14 +64,6 @@ parser.add_argument("--disable_lift", action="store_true", help="Do not subscrib
 parser.add_argument("--disable_cmd_vel", action="store_true", help="Do not subscribe to cmd_vel for the swerve base.")
 parser.add_argument("--domain_id", type=int, default=None, help="DDS domain id. Defaults to ROS_DOMAIN_ID or 0.")
 parser.add_argument("--enable_gravity", action="store_true", help="Enable gravity on the SH5 rigid bodies.")
-parser.add_argument(
-    "--environment_usd",
-    default=None,
-    help=(
-        "USD file or URL to spawn as the static environment. "
-        "Defaults to common.environment.DEFAULT_ENVIRONMENT_USD_PATH."
-    ),
-)
 parser.add_argument("--enable_environment", action="store_true", help="Spawn the environment USD.")
 parser.add_argument(
     "--enable_camera_views",
@@ -121,11 +110,8 @@ from robotis_lab.assets.robots import (
     SH5_SWERVE_WHEEL_JOINTS,
 )
 from common.environment import (
-    default_environment_usd_path,
     make_card_boxes_graspable,
-    make_environment_cfg,
-    remote_usd_path,
-    simple_warehouse_environment,
+    make_simple_warehouse_environment_cfg,
 )
 from common.swerve_drive import SwerveDriveController, SwerveModule
 
@@ -657,14 +643,6 @@ def main():
     if not os.path.exists(usd_path):
         raise FileNotFoundError(f"SH5 USD not found: {usd_path}")
 
-    environment_usd_path = args_cli.environment_usd or default_environment_usd_path()
-    if (
-        args_cli.enable_environment
-        and not remote_usd_path(environment_usd_path)
-        and not os.path.exists(environment_usd_path)
-    ):
-        raise FileNotFoundError(f"Environment USD not found: {environment_usd_path}")
-
     sim_cfg = sim_utils.SimulationCfg(
         device=args_cli.device,
         dt=1.0 / STEP_HZ,
@@ -675,10 +653,10 @@ def main():
 
     scene_cfg = SH5BringupSceneCfg(num_envs=1, env_spacing=2.0)
     if args_cli.enable_environment:
-        scene_cfg.environment = make_environment_cfg(environment_usd_path)
+        scene_cfg.environment = make_simple_warehouse_environment_cfg()
     scene_cfg.robot = _make_robot_cfg(usd_path).replace(prim_path="{ENV_REGEX_NS}/Robot")
     scene = InteractiveScene(scene_cfg)
-    if args_cli.enable_environment and simple_warehouse_environment(environment_usd_path):
+    if args_cli.enable_environment:
         make_card_boxes_graspable()
 
     sim.reset()
@@ -711,7 +689,7 @@ def main():
 
     print(f"[INFO] FFW SH5 DDS bringup ready. ROS_DOMAIN_ID={domain_id}")
     if args_cli.enable_environment:
-        print(f"[INFO] Environment USD: {environment_usd_path}")
+        print("[INFO] Environment: Simple Warehouse")
     print("[DDS] JointTrajectory subscriber reliability: best_effort")
     print(f"[DDS] Publishing joint states: {JOINT_STATES_TOPIC}")
     print(f"[DDS] Publishing TF: {TF_TOPIC} ({BASE_FRAME} -> robot links)")

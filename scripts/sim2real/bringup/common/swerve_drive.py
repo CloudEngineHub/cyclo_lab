@@ -14,8 +14,6 @@
 #
 # Author: Howon Kim
 
-"""Swerve drive inverse kinematics helpers."""
-
 from __future__ import annotations
 
 import math
