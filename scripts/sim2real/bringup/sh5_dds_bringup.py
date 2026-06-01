@@ -643,7 +643,7 @@ def main():
         render_interval=cfg.RENDER_INTERVAL,
     )
     sim = sim_utils.SimulationContext(sim_cfg)
-    sim.set_camera_view(cfg.AI_WORKER_OVERVIEW_CAMERA_EYE, cfg.AI_WORKER_OVERVIEW_CAMERA_TARGET)
+    sim.set_camera_view(cfg.ISAAC_SIM_OVERVIEW_CAMERA_EYE, cfg.ISAAC_SIM_OVERVIEW_CAMERA_TARGET)
 
     scene_cfg = SH5BringupSceneCfg(num_envs=1, env_spacing=2.0)
     if args_cli.enable_environment:

@@ -2,11 +2,12 @@
 
 1.2.0 (2026-05-28)
 ------------------
+* Updated FFW_SH5.usd for visualize simulation
 * Added SH5 robot configuration for swerve base, lift, arms, hands, and head actuators.
 * Added environment helpers for Simple Warehouse spawning and graspable card boxes.
 * Added swerve drive inverse kinematics helper for converting `cmd_vel` into wheel commands.
 * Added SH5 DDS bringup using the DDS SDK for robot command input and state publishing.
-* Contributors: Howon Kim
+* Contributors: Howon Kim, Bosung Kwon
 
 1.1.0 (2025-12-15)
 ------------------
