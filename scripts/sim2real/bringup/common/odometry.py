@@ -19,19 +19,10 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass
-from enum import Enum
 from typing import Sequence
 
 
 _TWO_PI = 2.0 * math.pi
-
-
-class OdomSolverMethod(Enum):
-    """Least-squares solver selection."""
-
-    PSEUDO_INVERSE = "pseudo_inverse"
-    QR_DECOMPOSITION = "qr"
-    SVD = "svd"
 
 
 @dataclass(frozen=True)
@@ -71,7 +62,6 @@ class SwerveOdometry:
         wheel_radius: float,
         *,
         velocity_rolling_window_size: int = 1,
-        solver_method: OdomSolverMethod | str = OdomSolverMethod.SVD,
     ):
         if len(module_x_offsets) != len(module_y_offsets):
             raise ValueError("module_x_offsets and module_y_offsets must have the same length")
@@ -83,7 +73,6 @@ class SwerveOdometry:
         self.module_x_offsets = [float(value) for value in module_x_offsets]
         self.module_y_offsets = [float(value) for value in module_y_offsets]
         self.wheel_radius = float(wheel_radius)
-        self.solver_method = self._coerce_solver_method(solver_method)
         self.velocity_rolling_window_size = max(1, int(velocity_rolling_window_size))
 
         self.x = 0.0
@@ -166,13 +155,16 @@ class SwerveOdometry:
             self.vy = float(vy)
             self.wz = float(wz)
 
-        self.yaw = normalize_angle(self.yaw + self.wz * dt)
-        cos_yaw = math.cos(self.yaw)
-        sin_yaw = math.sin(self.yaw)
+        yaw_prev = self.yaw
+        yaw_next = normalize_angle(yaw_prev + self.wz * dt)
+        yaw_mid = normalize_angle(yaw_prev + 0.5 * self.wz * dt)
+        cos_yaw = math.cos(yaw_mid)
+        sin_yaw = math.sin(yaw_mid)
         odom_vx = cos_yaw * self.vx - sin_yaw * self.vy
         odom_vy = sin_yaw * self.vx + cos_yaw * self.vy
         self.x += odom_vx * dt
         self.y += odom_vy * dt
+        self.yaw = yaw_next
 
     def _solve_least_squares_3d(self, rows: Sequence[Sequence[float]], values: Sequence[float]) -> tuple[float, float, float]:
         ata = [[0.0 for _ in range(3)] for _ in range(3)]
@@ -187,15 +179,6 @@ class SwerveOdometry:
         if solution is None:
             return 0.0, 0.0, 0.0
         return solution
-
-    @staticmethod
-    def _coerce_solver_method(method: OdomSolverMethod | str) -> OdomSolverMethod:
-        if isinstance(method, OdomSolverMethod):
-            return method
-        try:
-            return OdomSolverMethod(str(method))
-        except ValueError:
-            return OdomSolverMethod.SVD
 
 
 def normalize_angle(angle_rad: float) -> float:

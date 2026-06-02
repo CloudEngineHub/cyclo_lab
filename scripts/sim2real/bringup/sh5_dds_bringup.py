@@ -127,6 +127,11 @@ def _trajectory_qos() -> Qos:
     )
 
 
+def _now_stamp() -> Time_:
+    now_ns = time.time_ns()
+    return Time_(sec=now_ns // 1_000_000_000, nanosec=now_ns % 1_000_000_000)
+
+
 def _enabled_topics() -> dict[str, str]:
     topics = {
         "right_arm": cfg.AI_WORKER_RIGHT_ARM_TOPIC,
@@ -416,8 +421,7 @@ class SH5DdsBridge:
 
     # Publish robot state and close DDS resources
     def publish_joint_states(self):
-        now = time.time()
-        stamp = Time_(sec=int(now), nanosec=int((now - int(now)) * 1_000_000_000))
+        stamp = _now_stamp()
         header = Header_(stamp=stamp, frame_id="base_link")
 
         joint_names = list(self.robot.data.joint_names)
@@ -447,8 +451,7 @@ class SH5DdsBridge:
         for index in (0, 7, 14, 21, 28, 35):
             covariance[index] = 0.001
 
-        now = time.time()
-        stamp = Time_(sec=int(now), nanosec=int((now - int(now)) * 1_000_000_000))
+        stamp = _now_stamp()
         msg = Odometry_(
             header=Header_(stamp=stamp, frame_id=self.odom_frame),
             child_frame_id=self.base_frame,
@@ -482,8 +485,7 @@ class SH5DdsBridge:
                 )
             return
 
-        now = time.time()
-        stamp = Time_(sec=int(now), nanosec=int((now - int(now)) * 1_000_000_000))
+        stamp = _now_stamp()
         body_pose_w = self.robot.data.body_link_state_w[0, :, :7]
         base_pose_w = body_pose_w[self._base_id]
         base_pos_w = base_pose_w[:3].unsqueeze(0)
