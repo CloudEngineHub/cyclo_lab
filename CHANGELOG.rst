@@ -10,7 +10,7 @@ Changelog for package cyclo_lab
 * Added K1 Rev.1 dance motion datasets.
 * Added motion conversion and kinematics-only replay tools.
 * Added ``ai_sapiens`` as a third-party submodule.
-* Contributors: Woojin Wie
+* Contributors: Woojin Wie, Woojae Lee, Kiwoong Park
 
 1.2.1 (2026-06-02)
 ------------------
