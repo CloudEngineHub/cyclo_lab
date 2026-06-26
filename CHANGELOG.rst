@@ -2,6 +2,16 @@
 Changelog for package cyclo_lab
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.3.0 (2026-06-26)
+------------------
+* Renamed the extension package from ``robotis_lab`` to ``cyclo_lab``.
+* Added AI Sapiens K1 Rev.1 robot asset configuration.
+* Added K1 Rev.1 locomotion and mimic tracking task configurations.
+* Added K1 Rev.1 dance motion datasets.
+* Added motion conversion and kinematics-only replay tools.
+* Added ``ai_sapiens`` as a third-party submodule.
+* Contributors: Woojin Wie
+
 1.2.1 (2026-06-02)
 ------------------
 * Added swerve odometry calculation. 
