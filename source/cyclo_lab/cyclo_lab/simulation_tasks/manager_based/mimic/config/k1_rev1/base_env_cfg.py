@@ -26,7 +26,6 @@ from cyclo_lab.assets.robots.K1_rev1 import K1_REV1_INERTIA_TUNED_ACTION_SCALE, 
 from cyclo_lab.simulation_tasks.manager_based.mimic.tracking_env_cfg import (
     RewardsCfg,
     TrackingEnvCfg,
-    VELOCITY_RANGE,
 )
 import cyclo_lab.simulation_tasks.manager_based.mimic.mdp as mdp
 

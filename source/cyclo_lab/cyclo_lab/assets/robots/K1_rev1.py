@@ -51,8 +51,8 @@ K1_REV1_CFG = ArticulationCfg(
         activate_contact_sensors=True,
         fix_base=False,
         replace_cylinders_with_capsules=True,
-        joint_drive = sim_utils.UrdfConverterCfg.JointDriveCfg(
-          gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
