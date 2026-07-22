@@ -2,6 +2,11 @@
 Changelog for package cyclo_lab
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.1 (2026-07-22)
+------------------
+* Updated the ``ai_sapiens`` submodule pointer.
+* Contributors: Woojin Wie
+
 2.0.0 (2026-06-26)
 ------------------
 * Renamed the extension package from ``robotis_lab`` to ``cyclo_lab``.
