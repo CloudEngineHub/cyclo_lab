@@ -34,17 +34,17 @@ from cyclo_lab.assets.robots import CYCLO_LAB_ASSETS_DATA_DIR
 # Fixed child links are included in the mass properties of their USD rigid body.
 # Wrist-camera inertias are marked as unreliable in the reference URDF.
 _SG2_MASS_PROPERTIES = {
-    # base_link: URDF lines 7-29; lift_link: URDF lines 75-96; fixed joint: lines 97-101.
+    # base_link/lift_link: URDF lines 7-29 and 75-101; fixed LiDARs: lines 30-74.
     "world": (
-        53.889438999999996,
-        (-0.04274878723454516, -5.329800579293468e-06, 0.2971384994933794),
+        54.089439,
+        (-0.0430044090862174, -5.3100932180125e-06, 0.297312956841723),
         (
-            11.3018586003064,
-            -1.8250358259134208e-05,
-            1.3775171805477766,
-            13.758312097086169,
-            0.0001888273032177941,
-            3.0443403029354714,
+            11.3140221728782,
+            -1.81769385603034e-05,
+            1.3781671207296,
+            13.7599079878798,
+            0.000188777195584623,
+            3.05701262116865,
         ),
     ),
     # arm_base_link: URDF lines 651-672.

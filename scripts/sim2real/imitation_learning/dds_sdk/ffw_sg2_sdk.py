@@ -438,8 +438,8 @@ class FFWSG2Sdk:
         """Publish joint states and camera images."""
         self._publish_joint_states()
         self._publish_camera("cam_head")
-        # self._publish_camera("cam_wrist_right")
-        # self._publish_camera("cam_wrist_left")
+        self._publish_camera("cam_wrist_right")
+        self._publish_camera("cam_wrist_left")
 
     # ----------------------
     # Utility
