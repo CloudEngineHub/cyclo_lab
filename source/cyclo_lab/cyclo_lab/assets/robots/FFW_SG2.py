@@ -46,6 +46,11 @@ FFW_SG2_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
+            # # Swerve base joints
+            # "left_wheel_drive": 0.0, "left_wheel_steer": 0.0,
+            # "right_wheel_drive": 0.0, "right_wheel_steer": 0.0,
+            # "rear_wheel_drive": 0.0, "rear_wheel_steer": 0.0,
+
             **dict.fromkeys(SG2_SWERVE_STEERING_JOINTS + SG2_SWERVE_WHEEL_JOINTS, 0.0),
             # Left arm joints
             **{f"arm_l_joint{i + 1}": 0.0 for i in range(7)},
@@ -62,6 +67,19 @@ FFW_SG2_CFG = ArticulationCfg(
         },
     ),
     actuators={
+        # Actuators for swerve base
+        # "base": ImplicitActuatorCfg(
+        #     joint_names_expr=[
+        #         "left_wheel_drive", "left_wheel_steer",
+        #         "right_wheel_drive", "right_wheel_steer",
+        #         "rear_wheel_drive", "rear_wheel_steer",
+        #     ],
+        #     velocity_limit_sim=30.0,
+        #     effort_limit_sim=100000.0,
+        #     stiffness=10000.0,
+        #     damping=100.0,
+        # ),
+
         # Simulation defaults from FFW_SH5.py (f4c0470, lines 217-229).
         # These gains and limits are not measured SG2 motor specifications.
         "base_steer": ImplicitActuatorCfg(
