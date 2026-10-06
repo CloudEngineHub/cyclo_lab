@@ -162,6 +162,9 @@ class FFWSG2PickPlaceEnvCfg(PickPlaceEnvCfg):
         # ========== Scene Setup ==========
         # Robot
         self.scene.robot = FFW_SG2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        # The pick-and-place task keeps its original fixed base and gravity setting.
+        self.scene.robot.spawn.articulation_props.fix_root_link = True
+        self.scene.robot.spawn.rigid_props.disable_gravity = True
         self.scene.robot.spawn.semantic_tags = [("class", "robot")]
 
         # Table and Objects

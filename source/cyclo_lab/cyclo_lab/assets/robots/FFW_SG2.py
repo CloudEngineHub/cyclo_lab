@@ -15,16 +15,17 @@
 # Author: Taehyeong Kim
 
 import numpy as np
-from pxr import Gf, Usd, UsdPhysics
-
+from cyclo_lab.assets.robots import CYCLO_LAB_ASSETS_DATA_DIR
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
-from isaaclab.sim import ArticulationRootPropertiesCfg, RigidBodyPropertiesCfg, UsdFileCfg
+from isaaclab.sim import (
+    ArticulationRootPropertiesCfg,
+    RigidBodyPropertiesCfg,
+    UsdFileCfg,
+)
 from isaaclab.sim.spawners.from_files import from_files
 from isaaclab.sim.utils import clone
-
-from cyclo_lab.assets.robots import CYCLO_LAB_ASSETS_DATA_DIR
-
+from pxr import Gf, Usd, UsdPhysics
 
 # Source: ROBOTIS-GIT/ai_worker
 # ffw_description/urdf/ffw_sg2_rev1_follower/ffw_sg2_follower.urdf
@@ -214,13 +215,13 @@ def spawn_sg2_with_mass_properties(
     return robot
 
 
-# Fixed-base configuration used by the existing SG2 pick-and-place tasks.
+# Mobile SG2 asset; tasks can fix the root through their spawn configuration.
 FFW_SG2_CFG = ArticulationCfg(
     spawn=UsdFileCfg(
         func=spawn_sg2_with_mass_properties,
         usd_path=f"{CYCLO_LAB_ASSETS_DATA_DIR}/robots/FFW/FFW_SG2.usd",
         rigid_props=RigidBodyPropertiesCfg(
-            disable_gravity=True,
+            disable_gravity=False,
             max_depenetration_velocity=5.0,
         ),
         articulation_props=ArticulationRootPropertiesCfg(
@@ -232,24 +233,39 @@ FFW_SG2_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
+            **dict.fromkeys(SG2_SWERVE_STEERING_JOINTS + SG2_SWERVE_WHEEL_JOINTS, 0.0),
             # Left arm joints
             **{f"arm_l_joint{i + 1}": 0.0 for i in range(7)},
             # Right arm joints
             **{f"arm_r_joint{i + 1}": 0.0 for i in range(7)},
-
             # Left and right gripper joints
             **{f"gripper_l_joint{i + 1}": 0.0 for i in range(4)},
             **{f"gripper_r_joint{i + 1}": 0.0 for i in range(4)},
-
             # Head joints
             "head_joint1": 0.0,
             "head_joint2": 0.0,
-
             # Lift joint
             "lift_joint": 0.0,
         },
     ),
     actuators={
+        # Simulation defaults from FFW_SH5.py (f4c0470, lines 217-229).
+        # These gains and limits are not measured SG2 motor specifications.
+        "base_steer": ImplicitActuatorCfg(
+            joint_names_expr=list(SG2_SWERVE_STEERING_JOINTS),
+            velocity_limit_sim=10.0,
+            effort_limit_sim=100000.0,
+            stiffness=10000.0,
+            damping=100.0,
+        ),
+        "base_drive": ImplicitActuatorCfg(
+            joint_names_expr=list(SG2_SWERVE_WHEEL_JOINTS),
+            velocity_limit_sim=50.0,
+            effort_limit_sim=100000.0,
+            # Track wheel velocity without pulling the wheel back to a fixed angle.
+            stiffness=0.0,
+            damping=100.0,
+        ),
         # Actuator for vertical lift joint
         "lift": ImplicitActuatorCfg(
             joint_names_expr=["lift_joint"],
@@ -258,7 +274,6 @@ FFW_SG2_CFG = ArticulationCfg(
             stiffness=10000.0,
             damping=100.0,
         ),
-
         # Actuators for both arms
         "DY_80": ImplicitActuatorCfg(
             joint_names_expr=[
@@ -280,7 +295,7 @@ FFW_SG2_CFG = ArticulationCfg(
             stiffness=600.0,
             damping=20.0,
         ),
-        "DP-42" : ImplicitActuatorCfg(
+        "DP-42": ImplicitActuatorCfg(
             joint_names_expr=[
                 "arm_l_joint7",
                 "arm_r_joint7",
@@ -290,7 +305,6 @@ FFW_SG2_CFG = ArticulationCfg(
             stiffness=200.0,
             damping=3.0,
         ),
-
         # Actuators for grippers
         "gripper_master": ImplicitActuatorCfg(
             joint_names_expr=["gripper_l_joint1", "gripper_r_joint1"],
@@ -305,7 +319,6 @@ FFW_SG2_CFG = ArticulationCfg(
             stiffness=0.0,
             damping=0.0,
         ),
-
         # Actuators for head joints
         "head": ImplicitActuatorCfg(
             joint_names_expr=["head_joint1", "head_joint2"],
@@ -314,36 +327,5 @@ FFW_SG2_CFG = ArticulationCfg(
             stiffness=150.0,
             damping=3.0,
         ),
-    }
-)
-
-
-# The mobile USD stores wheel contact and joint-limit corrections.
-# Reuse the arm, gripper, head, lift, and mass settings above.
-FFW_SG2_MOBILE_CFG = FFW_SG2_CFG.copy()
-FFW_SG2_MOBILE_CFG.spawn.usd_path = f"{CYCLO_LAB_ASSETS_DATA_DIR}/robots/FFW/FFW_SG2_mobile.usda"
-FFW_SG2_MOBILE_CFG.spawn.rigid_props.disable_gravity = False
-FFW_SG2_MOBILE_CFG.init_state.joint_pos.update(
-    dict.fromkeys(SG2_SWERVE_STEERING_JOINTS + SG2_SWERVE_WHEEL_JOINTS, 0.0)
-)
-# Simulation defaults from FFW_SH5.py's base_steer/base_drive actuators.
-# These are starting gains and limits, not measured SG2 motor specifications.
-FFW_SG2_MOBILE_CFG.actuators.update(
-    {
-        "base_steer": ImplicitActuatorCfg(
-            joint_names_expr=list(SG2_SWERVE_STEERING_JOINTS),
-            velocity_limit_sim=10.0,
-            effort_limit_sim=100000.0,
-            stiffness=10000.0,
-            damping=100.0,
-        ),
-        "base_drive": ImplicitActuatorCfg(
-            joint_names_expr=list(SG2_SWERVE_WHEEL_JOINTS),
-            velocity_limit_sim=50.0,
-            effort_limit_sim=100000.0,
-            # Track wheel velocity without pulling the wheel back to a fixed angle.
-            stiffness=0.0,
-            damping=100.0,
-        ),
-    }
+    },
 )
