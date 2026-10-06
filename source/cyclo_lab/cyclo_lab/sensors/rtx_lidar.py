@@ -21,7 +21,6 @@ from dataclasses import dataclass
 
 import isaaclab.sim as sim_utils
 import numpy as np
-import omni.replicator.core as rep
 from isaaclab.sensors import SensorBase, SensorBaseCfg
 from isaaclab.utils import configclass
 from isaacsim.core.utils.extensions import enable_extension
@@ -45,6 +44,7 @@ class RtxLidar(SensorBase):
     def __init__(self, cfg: RtxLidarCfg):
         self._render_products = []
         self._annotators = []
+        self._azimuth_ranges = []
         self._data = RtxLidarData([], [])
         enable_extension("isaacsim.sensors.rtx")
         super().__init__(cfg)
@@ -68,6 +68,8 @@ class RtxLidar(SensorBase):
             self._data.ranges[index] = np.empty(0, dtype=np.float32)
 
     def _initialize_impl(self):
+        import omni.replicator.core as rep
+
         super()._initialize_impl()
         self._release_render_products()
         prims = sim_utils.find_matching_prims(self.cfg.prim_path)
@@ -78,6 +80,8 @@ class RtxLidar(SensorBase):
                 raise ValueError(f"Expected an OmniLidar at {prim.GetPath()}.")
             if prim.GetAttribute("omni:sensor:Core:outputFrameOfReference").Get() != "SENSOR":
                 raise ValueError(f"RTX LiDAR must return sensor-frame points at {prim.GetPath()}.")
+            azimuth_range = prim.GetAttribute("cyclo:lidar:azimuthRangeRad").Get()
+            self._azimuth_ranges.append(azimuth_range)
             # RTX rays come from the USD profile, independently of image resolution.
             product = rep.create.render_product(str(prim.GetPath()), resolution=(1, 1))
             self._render_products.append(product)
@@ -101,6 +105,12 @@ class RtxLidar(SensorBase):
             points = np.asarray(values, dtype=np.float32).reshape(-1, 3)
             distances = np.linalg.norm(points, axis=1)
             valid = np.isfinite(points).all(axis=1) & (distances > 0.0)
+            azimuth_range = self._azimuth_ranges[index]
+            if azimuth_range is not None:
+                # Native Sim 6.0.1 returns no points with a clipped rotary USD profile.
+                # Keep the URDF sector here; its limits are authored once in the USD.
+                azimuth = np.arctan2(points[:, 1], points[:, 0])
+                valid &= (azimuth >= azimuth_range[0]) & (azimuth <= azimuth_range[1])
             # Copy render-owned buffers so callers can retain this sample.
             self._data.point_clouds[index] = points[valid]
             self._data.ranges[index] = distances[valid]
@@ -116,6 +126,7 @@ class RtxLidar(SensorBase):
             product.destroy()
         self._annotators.clear()
         self._render_products.clear()
+        self._azimuth_ranges.clear()
 
 
 @configclass
