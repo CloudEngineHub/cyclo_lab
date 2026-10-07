@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Author: Sunghyun Park
+
 """Read existing USD RTX LiDARs through Isaac Lab's sensor lifecycle (Isaac Sim 5.1)."""
 
 from __future__ import annotations

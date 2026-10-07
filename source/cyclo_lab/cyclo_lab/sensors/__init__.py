@@ -12,4 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Author: Sunghyun Park
+
 from .rtx_lidar import RtxLidar, RtxLidarCfg, RtxLidarData

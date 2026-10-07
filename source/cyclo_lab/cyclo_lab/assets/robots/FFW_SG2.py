@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Taehyeong Kim
+# Author: Taehyeong Kim, Sunghyun Park
 
 from cyclo_lab.assets.robots import CYCLO_LAB_ASSETS_DATA_DIR
 from isaaclab.actuators import ImplicitActuatorCfg
@@ -67,18 +67,6 @@ FFW_SG2_CFG = ArticulationCfg(
         },
     ),
     actuators={
-        # Actuators for swerve base
-        # "base": ImplicitActuatorCfg(
-        #     joint_names_expr=[
-        #         "left_wheel_drive", "left_wheel_steer",
-        #         "right_wheel_drive", "right_wheel_steer",
-        #         "rear_wheel_drive", "rear_wheel_steer",
-        #     ],
-        #     velocity_limit_sim=30.0,
-        #     effort_limit_sim=100000.0,
-        #     stiffness=10000.0,
-        #     damping=100.0,
-        # ),
 
         # Simulation defaults from FFW_SH5.py (f4c0470, lines 217-229).
         # These gains and limits are not measured SG2 motor specifications.
