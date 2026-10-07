@@ -1,6 +1,14 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package cyclo_lab
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2.1.3 (2026-10-07)
+------------------
+* AIW Base movement: Corrected wheel limits, collisions, and articulation root settings that interfered with movement. Separated steering and wheel drive control.
+* AIW Mass properties: Corrected mass, center of mass, and inertia to match the reference URDF. Stored these values in the USD and removed the Python overrides.
+* AIW Cameras: Added wrist RGB/depth configuration, preserved USD mounting poses, and enabled previously disabled wrist image DDS publishing.
+* AIW LiDAR: Fixed missing scan returns by updating the RTX profile and point cloud reader for both sensors.
+* AIW Grippers: Disabled follower-joint stiffness and damping to prevent conflicts with mimic constraints.
+* Contributors: Sunghyun Park
 
 2.1.2 (2026-09-17)
 ------------------
@@ -63,7 +71,7 @@ Changelog for package cyclo_lab
 
 1.2.1 (2026-06-02)
 ------------------
-* Added swerve odometry calculation. 
+* Added swerve odometry calculation.
 * Updated `/odom` publishing in SH5 DDS bringup.
 * Contributors: Howon Kim
 
