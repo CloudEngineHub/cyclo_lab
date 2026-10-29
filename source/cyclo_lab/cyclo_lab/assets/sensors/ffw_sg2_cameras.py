@@ -16,8 +16,6 @@ FFW_SG2_WRIST_CAMERA_WIDTH = 640
 FFW_SG2_OVERHEAD_CAMERA_HEIGHT = 512
 FFW_SG2_OVERHEAD_CAMERA_WIDTH = 512
 
-# Align ROS optical +Z with link +X, then roll the image -90 degrees about that optical axis.
-FFW_SG2_D405_CAMERA_OPTICAL_ROT = (0.5, -0.5, 0.5, -0.5)
 FFW_SG2_OVERHEAD_LEFT_CAMERA_POS = (-0.10, 0.40, 1.8)
 FFW_SG2_OVERHEAD_LEFT_CAMERA_ROT = (0.8535534, 0.1464466, 0.3535534, -0.3535534)
 FFW_SG2_OVERHEAD_CENTER_CAMERA_POS = (0.1, 0.0, 2.0)
@@ -35,9 +33,7 @@ def make_ffw_sg2_head_camera_cfg(
     update_period: float = 0.0,
     height: int = FFW_SG2_HEAD_CAMERA_HEIGHT,
     width: int = FFW_SG2_HEAD_CAMERA_WIDTH,
-    clipping_range: tuple[float, float] = (0.01, 8.0),
 ):
-    import isaaclab.sim as sim_utils
     from isaaclab.sensors import CameraCfg
 
     return CameraCfg(
@@ -46,17 +42,8 @@ def make_ffw_sg2_head_camera_cfg(
         height=height,
         width=width,
         data_types=["rgb"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=10.4,
-            focus_distance=200.0,
-            horizontal_aperture=20.955,
-            clipping_range=clipping_range,
-        ),
-        offset=CameraCfg.OffsetCfg(
-            pos=(0.0, 0.03, 0.0),
-            rot=(0.5, 0.5, -0.5, -0.5),
-            convention="isaac",
-        ),
+        # Camera intrinsics and mounting pose are authored in FFW_SG2.usd.
+        spawn=None,
     )
 
 
@@ -66,9 +53,7 @@ def make_ffw_sg2_wrist_camera_cfg(
     update_period: float = 0.0,
     height: int = FFW_SG2_WRIST_CAMERA_HEIGHT,
     width: int = FFW_SG2_WRIST_CAMERA_WIDTH,
-    clipping_range: tuple[float, float] = (0.01, 8.0),
 ):
-    import isaaclab.sim as sim_utils
     from isaaclab.sensors import CameraCfg
 
     if side not in ("left", "right"):
@@ -89,17 +74,8 @@ def make_ffw_sg2_wrist_camera_cfg(
         height=height,
         width=width,
         data_types=["rgb"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=18.0,
-            focus_distance=400.0,
-            horizontal_aperture=20.955,
-            clipping_range=clipping_range,
-        ),
-        offset=CameraCfg.OffsetCfg(
-            pos=(0.0, 0.0, 0.0),
-            rot=FFW_SG2_D405_CAMERA_OPTICAL_ROT,
-            convention="ros",
-        ),
+        # Camera intrinsics and mounting pose are authored in FFW_SG2.usd.
+        spawn=None,
     )
 
 

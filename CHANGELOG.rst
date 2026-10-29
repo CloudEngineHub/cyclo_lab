@@ -2,7 +2,7 @@
 Changelog for package cyclo_lab
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-2.2.0 (2026-09-07)
+2.2.0 (2026-10-29)
 ------------------
 * Replaced direct DDS bindings with ROS2-compatible Zenoh transport for
   simulation bringup and existing Sim2Real interfaces.
@@ -17,6 +17,31 @@ Changelog for package cyclo_lab
 * Added packaged snack-object assets and corrected legacy object material
   references to use portable relative paths.
 * Contributors: Taehyeong Kim
+
+2.1.3 (2026-10-07)
+------------------
+* AIW Base movement: Corrected wheel limits, collisions, and articulation root settings that interfered with movement. Separated steering and wheel drive control.
+* AIW Mass properties: Corrected mass, center of mass, and inertia to match the reference URDF. Stored these values in the USD and removed the Python overrides.
+* AIW Cameras: Added wrist RGB/depth configuration, preserved USD mounting poses, and enabled previously disabled wrist image DDS publishing.
+* AIW LiDAR: Fixed missing scan returns by updating the RTX profile and point cloud reader for both sensors.
+* AIW Grippers: Disabled follower-joint stiffness and damping to prevent conflicts with mimic constraints.
+* Contributors: Sunghyun Park
+
+2.1.2 (2026-09-17)
+------------------
+* Updated the ``ai_sapiens`` submodule to ``611a070`` for the revised K1
+  URDF/MJCF inertial properties and mesh assets.
+* Preserved the existing K1 joint names and transforms while updating the
+  robot mass, centers of mass, and inertia tensors.
+* Contributors: Kiwoong Park
+
+2.1.1 (2026-09-16)
+------------------
+* Applied the configured RSL-RL action clipping to exported ONNX policy outputs
+  so deployment uses the same action bounds as the simulation wrapper.
+* Preserved unclipped exports when ``clip_actions`` is ``None`` and left
+  recurrent state outputs unchanged. Existing policies require re-exporting.
+* Contributors: Kiwoong Park
 
 2.1.0 (2026-08-26)
 ------------------
@@ -63,7 +88,7 @@ Changelog for package cyclo_lab
 
 1.2.1 (2026-06-02)
 ------------------
-* Added swerve odometry calculation. 
+* Added swerve odometry calculation.
 * Updated `/odom` publishing in SH5 DDS bringup.
 * Contributors: Howon Kim
 

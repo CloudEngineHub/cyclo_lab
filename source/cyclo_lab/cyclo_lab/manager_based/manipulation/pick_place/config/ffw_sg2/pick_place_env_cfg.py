@@ -37,6 +37,8 @@ from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import CameraCfg
 
+from cyclo_lab.sensors import RtxLidarCfg
+
 from . import mdp
 
 
@@ -61,6 +63,10 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     driver: AssetBaseCfg = MISSING
 
     cam_head: CameraCfg = MISSING
+    cam_wrist_left: CameraCfg = MISSING
+    cam_wrist_right: CameraCfg = MISSING
+    lidar_l: RtxLidarCfg = MISSING
+    lidar_r: RtxLidarCfg = MISSING
 
     # Background cube for color randomization
     background_cube: AssetBaseCfg = MISSING
