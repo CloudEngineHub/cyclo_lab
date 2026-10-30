@@ -14,7 +14,15 @@
 #
 # Author: Taehyeong Kim, Sunghyun Park
 
+from copy import deepcopy
+
 from cyclo_lab.assets.robots import CYCLO_LAB_ASSETS_DATA_DIR
+from cyclo_lab.robot_specs.ffw.sg2.control import FFW_SG2_SWERVE_STEERING_ANGULAR_VELOCITY_LIMIT
+from cyclo_lab.robot_specs.ffw.sg2.mobile_base import (
+    SG2_SWERVE_DRIVE_DAMPING,
+    SG2_SWERVE_STEERING_JOINTS,
+    SG2_SWERVE_WHEEL_JOINTS,
+)
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.sim import (
@@ -23,10 +31,9 @@ from isaaclab.sim import (
     UsdFileCfg,
 )
 
-SG2_SWERVE_STEERING_JOINTS = ("left_wheel_steer", "right_wheel_steer", "rear_wheel_steer")
-SG2_SWERVE_WHEEL_JOINTS = ("left_wheel_drive", "right_wheel_drive", "rear_wheel_drive")
-# Reference URDF lines 1675-1678, 1739-1742, and 1797-1800; dimensions in metres.
-SG2_SWERVE_WHEEL_RADIUS = 0.0865
+_SG2_PHYSICS_LIFT_EFFORT_LIMIT = 5_000_000.0
+_SG2_PHYSICS_LIFT_STIFFNESS = 250_000.0
+_SG2_PHYSICS_LIFT_DAMPING = 5_000.0
 
 
 # Mass properties are stored in the USD; tasks can fix the root through their spawn configuration.
@@ -72,7 +79,7 @@ FFW_SG2_CFG = ArticulationCfg(
         # These gains and limits are not measured SG2 motor specifications.
         "base_steer": ImplicitActuatorCfg(
             joint_names_expr=list(SG2_SWERVE_STEERING_JOINTS),
-            velocity_limit_sim=10.0,
+            velocity_limit_sim=FFW_SG2_SWERVE_STEERING_ANGULAR_VELOCITY_LIMIT,
             effort_limit_sim=100000.0,
             stiffness=10000.0,
             damping=100.0,
@@ -83,7 +90,7 @@ FFW_SG2_CFG = ArticulationCfg(
             effort_limit_sim=100000.0,
             # Track wheel velocity without pulling the wheel back to a fixed angle.
             stiffness=0.0,
-            damping=100.0,
+            damping=SG2_SWERVE_DRIVE_DAMPING,
         ),
         # Actuator for vertical lift joint
         "lift": ImplicitActuatorCfg(
@@ -132,9 +139,10 @@ FFW_SG2_CFG = ArticulationCfg(
             stiffness=100.0,
             damping=4.0,
         ),
-        "gripper_slave": ImplicitActuatorCfg(
+        "gripper_passive": ImplicitActuatorCfg(
             joint_names_expr=["gripper_l_joint[2-4]", "gripper_r_joint[2-4]"],
-            effort_limit_sim=20.0,
+            velocity_limit_sim=10.0,
+            effort_limit_sim=1.0,
             stiffness=0.0,
             damping=0.0,
         ),
@@ -148,3 +156,12 @@ FFW_SG2_CFG = ArticulationCfg(
         ),
     },
 )
+
+
+FFW_SG2_PHYSICS_CFG = deepcopy(FFW_SG2_CFG)
+FFW_SG2_PHYSICS_CFG.spawn.rigid_props.linear_damping = 2.0
+FFW_SG2_PHYSICS_CFG.spawn.rigid_props.angular_damping = 4.0
+FFW_SG2_PHYSICS_CFG.articulation_root_prim_path = "/ffw_sg2_follower/world"
+FFW_SG2_PHYSICS_CFG.actuators["lift"].effort_limit_sim = _SG2_PHYSICS_LIFT_EFFORT_LIMIT
+FFW_SG2_PHYSICS_CFG.actuators["lift"].stiffness = _SG2_PHYSICS_LIFT_STIFFNESS
+FFW_SG2_PHYSICS_CFG.actuators["lift"].damping = _SG2_PHYSICS_LIFT_DAMPING
